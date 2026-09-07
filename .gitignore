@@ -1,0 +1,87 @@
+# Secrets (MANDATORY - NEVER COMMIT THESE)
+*.key
+*.pem
+*.pfx
+*.p12
+secrets/
+.env
+.env.local
+.env.*.local
+*_secret.yaml
+*_secret.yml
+*_credentials.json
+credentials.json
+node_secrets/
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+*.so
+*.dylib
+*.dll
+
+# IDE
+.vscode/settings.json
+.vscode/.ropeproject
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build artifacts
+*.o
+*.a
+*.lib
+*.exe
+*.out
+*.app
+build/
+sdkconfig.old
+dependencies.lock
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+tmp/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
