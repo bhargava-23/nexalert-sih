@@ -1,0 +1,12 @@
+[project]
+name = "nexalert-config"
+version = "0.1.0"
+description = "NexAlert configuration registry schema"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "pydantic>=2.5.0,<3.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0.0"]
+build-backend = "setuptools.build_meta"

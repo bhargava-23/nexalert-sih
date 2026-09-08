@@ -1,0 +1,26 @@
+{
+  "name": "nexalert-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/nexalert-types",
+    "packages/nexalert-ui-components"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/authority-dashboard",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.1.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0"
+  }
+}

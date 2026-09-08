@@ -1,0 +1,15 @@
+# Root pyproject.toml - TOOLING ONLY, not an installable package
+# This file configures workspace-level tooling (black, ruff, mypy)
+# Individual Python packages are independently installable
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

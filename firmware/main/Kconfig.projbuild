@@ -1,0 +1,9 @@
+menu "NexAlert Project Configuration"
+
+config NEXALERT_NODE_ID
+    string "Node ID"
+    default "node-001"
+    help
+        Unique identifier for this node
+
+endmenu

@@ -1,0 +1,21 @@
+[project]
+name = "nexalert-reference"
+version = "0.1.0"
+description = "NexAlert reference math (golden vector generation only)"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "numpy>=1.24.0,<2.0.0",
+    "scipy>=1.10.0,<2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pytest>=7.4.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0.0"]
+build-backend = "setuptools.build_meta"
