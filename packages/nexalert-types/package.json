@@ -7,11 +7,16 @@
   "scripts": {
     "build": "tsc",
     "lint": "eslint src",
-    "test": "echo \"No tests yet\""
+    "test": "jest"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.11.0",
-    "typescript": "^5.3.0",
-    "eslint": "^8.56.0"
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "eslint": "^8.56.0",
+    "jest": "^30.5.1",
+    "ts-jest": "^29.4.12",
+    "typescript": "^5.3.0"
   }
 }

@@ -395,7 +395,48 @@ The following implementation details are DEFERRED to later phases. These are NOT
 
 ---
 
+---
+
+## Phase 4 Decisions
+
+### D1: H_i Missing Diagnostic Behavior [IMPLEMENTATION DECISION 2026-09-08]
+
+**Decision**: When required diagnostic dimensions D_ij are missing (absent/None), H_i computation returns `(None, False)` where the boolean flag signals incomplete diagnostics.
+
+**Rationale**:
+- Preserves missing ≠ zero invariant (IMPLEMENTATION_CONSTITUTION.md Section 3)
+- Provides honest signal degradation: incomplete diagnostic data = incomplete health assessment
+- Explicit signaling via return tuple allows downstream consumers to detect and handle degraded information
+- Strictest information honesty: ensures incomplete diagnostic state is never silently treated as healthy
+
+**Implementation**:
+- `compute_health()` returns `Tuple[Optional[float], bool]`
+- First value: H_i in [0,1] or None when diagnostics incomplete
+- Second value: `diagnostics_complete` flag (True = all required diagnostics present)
+- Implementation: `reference/python/nexalert_reference/health.py`
+
+**Status**: IMPLEMENTATION DECISION - approved for Phase 4
+
+**Related Specifications**:
+- Document 04, Section 3.1 (Sensor Health H_i) - specifies formula but not missing diagnostic behavior
+- IMPLEMENTATION_CONSTITUTION.md, Section 3 (Missing ≠ zero invariant)
+- IMPLEMENTATION_CONSTITUTION.md, Section 11 (Explicit handling requirement)
+
+**Additional Context**:
+- **Specification gap**: Document 04 Section 3.1 specifies H_i formula `H_i^soft = Σ_j w_ij · D_ij` but does NOT define behavior when D_ij is missing
+- **Alternative considered**: Compute partial H_i using only available diagnostics with renormalized weights
+  * Rejected: Would produce degraded score without explicit signal that computation was incomplete
+- **Alternative considered**: Treat specific diagnostics as optional vs required (configuration-driven)
+  * Deferred: Requires configuration registry (Phase 5); current implementation assumes all weighted diagnostics are required
+- **Phase 4 scope**: Reference implementation establishes honest degradation pattern; production systems (Phase 5+) may add configuration to distinguish required vs optional diagnostics
+
+---
+
 ## Change Log
+
+### 2026-09-08: Phase 4 Decisions
+- **Added D1**: H_i missing diagnostic behavior (IMPLEMENTATION DECISION)
+- Documents human-approved Phase 4 decision for missing diagnostic handling
 
 ### 2026-09-07: Initial Version
 - Created DECISIONS.md
@@ -407,7 +448,7 @@ The following implementation details are DEFERRED to later phases. These are NOT
 
 ## Summary
 
-**Resolved Decisions**: 3 (C1, C2, C3)  
+**Resolved Decisions**: 4 (C1, C2, C3, D1)  
 **Unresolved Questions**: 0  
 **Deferred Implementation Details**: 4 (UID-1, UID-2, UID-3, UID-4)
 

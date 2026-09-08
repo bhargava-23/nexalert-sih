@@ -1,0 +1,14 @@
+{
+  "diagnostics": {
+    "self_test_passed": 0.8,
+    "comm_integrity": 0.9,
+    "calibration_valid": 1.0,
+    "stability_index": 0.7
+  },
+  "weights": {
+    "self_test_passed": 0.3,
+    "comm_integrity": 0.3,
+    "calibration_valid": 0.2,
+    "stability_index": 0.2
+  }
+}

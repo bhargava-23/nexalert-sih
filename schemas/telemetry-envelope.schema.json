@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://nexalert.sih2026.gov.in/schemas/telemetry-envelope.v1.json",
+  "title": "NexAlert Telemetry Envelope",
+  "description": "Canonical telemetry schema for NexAlert field node observations. Source: Document 07 Section 7. This is THE authoritative telemetry contract for the entire NexAlert repository.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "telemetry_id",
+    "node_id",
+    "sequence",
+    "measurement_timestamp",
+    "received_timestamp",
+    "location",
+    "measurements",
+    "diagnostics",
+    "power",
+    "source"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "telemetry.v1",
+      "description": "Schema version for evolution"
+    },
+    "telemetry_id": {
+      "type": "string",
+      "description": "Unique telemetry identifier (ULID format recommended)",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "node_id": {
+      "type": "string",
+      "description": "Registered node identity",
+      "pattern": "^NODE-[0-9]{3,}$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic per-node sequence for ordering/replay detection"
+    },
+    "measurement_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When observation was captured (UTC ISO 8601). MUST NOT be trusted as server receive time per Document 07 Section 7."
+    },
+    "received_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When backend received telemetry (UTC ISO 8601). Server-assigned. DISTINCT from measurement_timestamp per IMPLEMENTATION_CONSTITUTION.md Section 12."
+    },
+    "location": {
+      "type": "object",
+      "required": ["lat", "lon"],
+      "properties": {
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90,
+          "description": "Latitude (WGS84)"
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Longitude (WGS84)"
+        },
+        "alt": {
+          "type": ["number", "null"],
+          "description": "Altitude in meters. null = missing (NOT zero per IMPLEMENTATION_CONSTITUTION.md Section 3)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "measurements": {
+      "type": "object",
+      "description": "Sensor readings. All fields optional. null/absent = missing (NOT zero per IMPLEMENTATION_CONSTITUTION.md Section 3).",
+      "properties": {
+        "temp_c": {
+          "type": ["number", "null"],
+          "description": "Temperature in Celsius"
+        },
+        "humidity_pct": {
+          "type": ["number", "null"],
+          "description": "Relative humidity percentage"
+        },
+        "pressure_hpa": {
+          "type": ["number", "null"],
+          "description": "Atmospheric pressure in hPa"
+        },
+        "pm25_ug_m3": {
+          "type": ["number", "null"],
+          "description": "PM2.5 particulate matter in µg/m³"
+        },
+        "pm10_ug_m3": {
+          "type": ["number", "null"],
+          "description": "PM10 particulate matter in µg/m³"
+        }
+      },
+      "additionalProperties": true
+    },
+    "diagnostics": {
+      "type": "object",
+      "description": "Health diagnostic dimensions D_ij for H_i computation per Document 04 Section 3.1",
+      "properties": {
+        "uptime_s": {
+          "type": ["integer", "null"],
+          "description": "Uptime in seconds"
+        },
+        "self_test_passed": {
+          "type": ["boolean", "null"],
+          "description": "Self-test result"
+        },
+        "comm_integrity": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Communication integrity [0,1]"
+        },
+        "calibration_valid": {
+          "type": ["boolean", "null"],
+          "description": "Calibration validity flag"
+        },
+        "stability_index": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Long-term stability [0,1]"
+        }
+      },
+      "additionalProperties": true
+    },
+    "power": {
+      "type": "object",
+      "description": "Power/battery state",
+      "properties": {
+        "battery_pct": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Battery percentage"
+        },
+        "battery_voltage": {
+          "type": ["number", "null"],
+          "description": "Battery voltage"
+        },
+        "solar_current": {
+          "type": ["number", "null"],
+          "description": "Solar current in amps"
+        }
+      },
+      "additionalProperties": true
+    },
+    "source": {
+      "type": "string",
+      "enum": ["HARDWARE", "SIMULATION"],
+      "description": "LIVE vs SIMULATION distinction per Document 07 Section 7"
+    },
+    "auth": {
+      "type": "object",
+      "description": "HMAC authentication (Phase 6 implementation). Placeholder in Phase 4.",
+      "properties": {
+        "hmac": {
+          "type": "string",
+          "description": "HMAC-SHA256 signature"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

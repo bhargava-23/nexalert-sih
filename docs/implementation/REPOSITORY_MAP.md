@@ -22,11 +22,13 @@
 
 ```
 nexalert/
+├── schemas/           # Authoritative contract definitions (JSON Schema)
 ├── apps/              # User-facing applications (Authority dashboard, Citizen web/PWA)
 ├── services/          # Backend services (Python modular monolith, Master service)
 ├── firmware/          # ESP32-S3 embedded firmware (ESP-IDF + C/C++)
 ├── packages/          # Shared libraries (types, math, config, events, UI components)
 ├── db/                # Database schema and migrations (PostgreSQL/PostGIS)
+├── reference/         # Reference implementations (validation only, never imported by production)
 ├── tests/             # Test suites (golden vectors, integration, scenarios, security, fault injection)
 ├── docs/              # Documentation (specifications, implementation governance, architecture, validation)
 ├── infra/             # Infrastructure as code (Ansible, Docker, K8s)
@@ -35,6 +37,34 @@ nexalert/
 ```
 
 ---
+
+## Canonical Locations
+
+### Authoritative Telemetry Contract
+
+**File**: `schemas/telemetry-envelope.schema.json`
+
+**Purpose**: THE single authoritative declarative source of truth for NexAlert telemetry contract. This is the canonical telemetry schema for the entire repository.
+
+**Authority**: Document 07, Section 7 (Telemetry API Contract)
+
+**Status**: LOCKED - This is the authoritative telemetry contract. No other file, documentation, or specification may introduce a competing telemetry contract definition.
+
+**Contract Governance**:
+- Python representation: `packages/nexalert-events/nexalert_events/telemetry.py` MUST synchronize to this schema
+- TypeScript representation: `packages/nexalert-types/src/telemetry.ts` MUST synchronize to this schema
+- Future firmware representation: Will synchronize to this schema
+- Schema changes require review per IMPLEMENTATION_CONSTITUTION.md Section 1
+- Changes must preserve locked invariants: missing ≠ zero, measurement_timestamp ≠ receive_timestamp, LIVE vs SIMULATION distinction
+
+**Synchronization Validation**:
+- Python: `packages/nexalert-events/tests/test_schema_sync.py` validates against authoritative schema
+- TypeScript: `packages/nexalert-types/src/telemetry-validator.ts` validates using ajv against authoritative schema
+- Gate A includes schema synchronization checks
+
+---
+
+## Repository Overview
 
 ## Directory Structure
 
