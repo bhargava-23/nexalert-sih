@@ -9,6 +9,7 @@
 
 #include "mqtt_client.h"
 #include <mqtt_client.h>
+#include "esp_event.h"
 #include "esp_log.h"
 #include <string.h>
 
