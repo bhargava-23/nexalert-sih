@@ -1,0 +1,12 @@
+# NexAlert Raspberry Pi Requirements
+# Python dependencies for MQTT subscriber and schema validation
+
+# MQTT client
+paho-mqtt>=1.6.1
+
+# JSON schema validation
+jsonschema>=4.19.0
+
+# For future database integration
+# psycopg2-binary>=2.9.9
+# sqlalchemy>=2.0.23
