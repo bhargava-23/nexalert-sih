@@ -1,0 +1,12 @@
+{
+  "c_cov": 0.8,
+  "c_agree": 0.95,
+  "c_temp": 0.9,
+  "c_base": 1.0,
+  "weights": {
+    "coverage": 0.3,
+    "agreement": 0.3,
+    "temporal": 0.2,
+    "baseline": 0.2
+  }
+}

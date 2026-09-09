@@ -1,0 +1,20 @@
+{
+  "hazard_type": "fire",
+  "sensor_readings": {
+    "temperature": 60.0
+  },
+  "evidence_config": {
+    "core_evidence": [
+      {
+        "sensor": "temperature",
+        "threshold_min": 60.0,
+        "threshold_max": 150.0,
+        "weight": 0.5
+      }
+    ],
+    "core_evidence_floor": {
+      "min_core_coverage": 0.5,
+      "cap_without_core": 0.3
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "hazard_type": "fire",
+  "sensor_readings": {
+    "temperature": 80.0
+  },
+  "evidence_config": {
+    "core_evidence": [],
+    "supporting_evidence": []
+  }
+}

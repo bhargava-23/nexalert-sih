@@ -1,0 +1,4 @@
+{
+  "anomalies": {"temp": 0.8, "smoke": null},
+  "reliabilities": {"temp": 0.9, "smoke": 0.7}
+}

@@ -1,0 +1,27 @@
+{
+  "hazard_type": "flood",
+  "sensor_readings": {
+    "water_level": 2.5,
+    "rainfall": 50.0
+  },
+  "evidence_config": {
+    "core_evidence": [
+      {
+        "sensor": "water_level",
+        "threshold_min": 2.0,
+        "threshold_max": 10.0,
+        "weight": 0.6
+      },
+      {
+        "sensor": "rainfall",
+        "threshold_min": 30.0,
+        "threshold_max": 200.0,
+        "weight": 0.3
+      }
+    ],
+    "core_evidence_floor": {
+      "min_core_coverage": 0.5,
+      "cap_without_core": 0.4
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "sensor_availability": {
+    "temperature": true,
+    "smoke": true,
+    "humidity": true,
+    "co": true
+  },
+  "weights": {
+    "temperature": 0.5,
+    "smoke": 0.3,
+    "humidity": 0.1,
+    "co": 0.1
+  }
+}

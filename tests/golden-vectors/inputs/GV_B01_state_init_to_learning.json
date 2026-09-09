@@ -1,0 +1,9 @@
+{
+  "current_state": "INITIALIZING",
+  "sample_count": 15,
+  "min_samples_init": 10,
+  "min_samples_learning": 50,
+  "hazard_state": "NORMAL",
+  "stability_count": 0,
+  "recovery_stability_samples": 10
+}

@@ -1,0 +1,41 @@
+{
+  "hazard_type": "fire",
+  "sensor_readings": {
+    "temperature": 80.0,
+    "smoke": 0.6,
+    "water_level": 2.5,
+    "rainfall": 50.0
+  },
+  "fire_config": {
+    "core_evidence": [
+      {
+        "sensor": "temperature",
+        "threshold_min": 60.0,
+        "threshold_max": 150.0,
+        "weight": 0.5
+      },
+      {
+        "sensor": "smoke",
+        "threshold_min": 0.3,
+        "threshold_max": 1.0,
+        "weight": 0.3
+      }
+    ]
+  },
+  "flood_config": {
+    "core_evidence": [
+      {
+        "sensor": "water_level",
+        "threshold_min": 2.0,
+        "threshold_max": 10.0,
+        "weight": 0.6
+      },
+      {
+        "sensor": "rainfall",
+        "threshold_min": 30.0,
+        "threshold_max": 200.0,
+        "weight": 0.3
+      }
+    ]
+  }
+}

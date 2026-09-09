@@ -1,0 +1,4 @@
+{
+  "anomalies": {"temp": 0.8},
+  "reliabilities": {"temp": 1e-10}
+}

@@ -1,0 +1,13 @@
+{
+  "group_evidence": {
+    "thermal": 0.2,
+    "smoke": 0.8,
+    "gas": 0.5
+  },
+  "group_weights": {
+    "thermal": 0.5,
+    "smoke": 0.3,
+    "gas": 0.2
+  },
+  "k_v": 2.0
+}

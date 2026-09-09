@@ -1,0 +1,32 @@
+{
+  "hazard_type": "fire",
+  "sensor_readings": {
+    "temperature": 80.0,
+    "smoke": 0.1,
+    "humidity": 0.5
+  },
+  "evidence_config": {
+    "core_evidence": [
+      {
+        "sensor": "temperature",
+        "threshold_min": 60.0,
+        "threshold_max": 150.0,
+        "weight": 0.5
+      },
+      {
+        "sensor": "smoke",
+        "threshold_min": 0.3,
+        "threshold_max": 1.0,
+        "weight": 0.3
+      }
+    ],
+    "supporting_evidence": [
+      {
+        "sensor": "humidity",
+        "threshold_min": 0.0,
+        "threshold_max": 0.3,
+        "weight": 0.1
+      }
+    ]
+  }
+}

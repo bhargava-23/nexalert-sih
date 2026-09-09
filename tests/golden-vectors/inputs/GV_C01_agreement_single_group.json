@@ -1,0 +1,9 @@
+{
+  "group_evidence": {
+    "thermal": 0.8
+  },
+  "group_weights": {
+    "thermal": 1.0
+  },
+  "k_v": 2.0
+}

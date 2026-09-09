@@ -77,12 +77,13 @@ ESP32-S3 Field Nodes → Raspberry Pi Master → Cloud Backend
 - ✅ Gate A validation script (scripts/qa/gate_a_check.sh)
 - ⏳ Python-based verification pending (Python unavailable in current environment)
 
-**Next Phase**: Phase 5: Intelligence Layer Implementation
-- Implement baseline computation (B_i states)
-- Implement anomaly detection (A_i, A_node, A_h)
-- Implement hazard evidence and confidence (E_h, C_h)
-- Implement severity and risk (S_h, R_h)
-- Implement hazard state machine
+**Phase 5 Progress**: Intelligence Layer Implementation (IN PROGRESS)
+- ✅ Iteration 1: Baseline computation (B_i states) - 19 tests PASS
+- ✅ Iteration 2: Anomaly detection (A_i, A_node, A_h) - 26 tests PASS
+- ✅ Iteration 3: Golden vectors expansion (B/A) - 23 tests PASS
+- ✅ Iteration 4: Evidence (E_h) and Confidence (C_h) - 85 tests PASS (27 evidence + 36 confidence + 22 golden vectors)
+- ⏳ Total Phase 5 tests: 176/176 PASS (including 29 Phase 4 golden vectors)
+- ⏳ Next: Severity (S_h), Risk (R_h), Hazard State Machine
 
 ---
 
