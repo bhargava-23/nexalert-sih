@@ -1,0 +1,13 @@
+{
+  "flood_e_h": 0.6,
+  "flood_s_h": 0.5,
+  "flood_t_h": 0.3,
+  "fire_e_h": 0.8,
+  "fire_s_h": 0.7,
+  "fire_t_h": 0.5,
+  "weights": {
+    "w_E": 0.4,
+    "w_S": 0.4,
+    "w_T": 0.2
+  }
+}

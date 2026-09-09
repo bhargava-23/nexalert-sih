@@ -1,0 +1,10 @@
+{
+  "i_h": null,
+  "t_h": null,
+  "d_h": null,
+  "weights": {
+    "w_I": 0.5,
+    "w_T": 0.3,
+    "w_D": 0.2
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "e_h": 0.8,
+  "s_h": 0.7,
+  "t_h": 0.5,
+  "c_h": 0.9,
+  "weights": {
+    "w_E": 0.4,
+    "w_S": 0.4,
+    "w_T": 0.2
+  },
+  "note": "Confidence should NOT be multiplied into R_h"
+}
