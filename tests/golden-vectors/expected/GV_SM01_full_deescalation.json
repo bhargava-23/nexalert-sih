@@ -1,0 +1,27 @@
+{
+  "state_sequence": [
+    "CRITICAL",
+    "CRITICAL",
+    "CONFIRMED",
+    "CONFIRMED",
+    "CONFIRMED",
+    "SUSPECTED",
+    "SUSPECTED",
+    "SUSPECTED",
+    "SUSPECTED",
+    "SUSPECTED",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "RESOLVED",
+    "NORMAL"
+  ],
+  "final_state": "NORMAL"
+}

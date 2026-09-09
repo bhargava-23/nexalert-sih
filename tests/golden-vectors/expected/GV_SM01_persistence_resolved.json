@@ -1,0 +1,15 @@
+{
+  "state_sequence": [
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "RESOLVED"
+  ],
+  "final_state": "RESOLVED"
+}

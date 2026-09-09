@@ -1,0 +1,11 @@
+{
+  "state_sequence": [
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "WATCH",
+    "SUSPECTED"
+  ],
+  "final_state": "SUSPECTED"
+}

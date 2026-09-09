@@ -1,0 +1,8 @@
+{
+  "state_sequence": [
+    "CRITICAL",
+    "CRITICAL",
+    "CRITICAL"
+  ],
+  "final_state": "CRITICAL"
+}

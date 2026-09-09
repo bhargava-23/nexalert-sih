@@ -1,0 +1,10 @@
+{
+  "state_sequence": [
+    "SUSPECTED",
+    "SUSPECTED",
+    "SUSPECTED",
+    "SUSPECTED",
+    "CONFIRMED"
+  ],
+  "final_state": "CONFIRMED"
+}

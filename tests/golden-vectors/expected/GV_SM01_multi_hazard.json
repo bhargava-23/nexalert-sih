@@ -1,0 +1,10 @@
+{
+  "fire_state_sequence": [
+    "CONFIRMED"
+  ],
+  "fire_final_state": "CONFIRMED",
+  "flood_state_sequence": [
+    "NORMAL"
+  ],
+  "flood_final_state": "NORMAL"
+}

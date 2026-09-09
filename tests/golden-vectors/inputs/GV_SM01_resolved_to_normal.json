@@ -1,0 +1,72 @@
+{
+  "initial_state": "RESOLVED",
+  "resolved_hold_start": 1000.0,
+  "time_series": [
+    {
+      "timestamp": 1300.0,
+      "E_h": 0.15,
+      "C_h": 0.7,
+      "S_h": 0.2,
+      "R_h": 0.15,
+      "A_h": 0.2,
+      "T_h": 0.1,
+      "core_coverage": 0.75,
+      "baseline_status": "RECOVERING"
+    }
+  ],
+  "config": {
+    "hazard_type": "fire",
+    "thresholds": {
+      "watch_risk_enter": 0.3,
+      "watch_anomaly_enter": 0.5,
+      "suspected_evidence_enter": 0.4,
+      "confirmed_evidence_enter": 0.7,
+      "confirmed_confidence_min": 0.6,
+      "confirmed_core_coverage_min": 0.7,
+      "critical_severity_enter": 0.85,
+      "critical_risk_enter": 0.9,
+      "resolved_evidence_max": 0.2,
+      "resolved_risk_max": 0.2
+    },
+    "hysteresis": {
+      "watch_risk_exit": 0.25,
+      "suspected_evidence_exit": 0.35,
+      "confirmed_evidence_exit": 0.65,
+      "confirmed_confidence_min_exit": 0.55,
+      "confirmed_core_coverage_min_exit": 0.65,
+      "critical_severity_exit": 0.8,
+      "critical_risk_exit": 0.85
+    },
+    "persistence": {
+      "watch_enter": 1,
+      "suspected_enter": 3,
+      "confirmed_enter": 5,
+      "critical_enter": 1,
+      "resolved_enter": 10,
+      "deescalate": 3
+    },
+    "fast_paths": {
+      "watch_to_confirmed_evidence": 0.85,
+      "watch_to_confirmed_severity": 0.8,
+      "watch_to_confirmed_confidence": 0.6,
+      "watch_to_confirmed_core_coverage": 0.7,
+      "watch_to_confirmed_persistence": 2,
+      "suspected_to_critical_severity": 0.9,
+      "suspected_to_critical_temporal": 0.8,
+      "suspected_to_critical_confidence": 0.4,
+      "suspected_to_critical_core_coverage": 0.5
+    },
+    "resolved_hold_seconds": 300.0,
+    "information_condition": {
+      "good_confidence_min": 0.7,
+      "good_core_coverage_min": 0.8,
+      "degraded_confidence_min": 0.4,
+      "degraded_core_coverage_min": 0.5
+    },
+    "max_staleness_seconds": 60.0,
+    "provenance": "PROTOTYPE ASSUMPTIONS",
+    "validation_status": "UNVALIDATED",
+    "owner": "Phase 5 implementation",
+    "config_version": "1.0-prototype"
+  }
+}
