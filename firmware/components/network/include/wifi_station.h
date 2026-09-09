@@ -9,6 +9,7 @@
 #define NEXALERT_WIFI_STATION_H
 
 #include "esp_err.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {

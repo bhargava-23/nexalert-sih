@@ -8,7 +8,7 @@
  */
 
 #include "mqtt_client.h"
-#include "esp_mqtt_client.h"
+#include <mqtt_client.h>
 #include "esp_log.h"
 #include <string.h>
 

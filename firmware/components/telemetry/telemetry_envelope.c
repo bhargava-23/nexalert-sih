@@ -189,7 +189,7 @@ esp_err_t telemetry_envelope_generate(
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGD(TAG, "Generated telemetry envelope, sequence=%u", telem_state.sequence - 1);
+    ESP_LOGD(TAG, "Generated telemetry envelope, sequence=%" PRIu32, telem_state.sequence - 1);
     return ESP_OK;
 }
 

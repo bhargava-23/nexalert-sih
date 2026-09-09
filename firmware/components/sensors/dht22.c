@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "esp_rom_sys.h"
 #include <string.h>
 
 static const char *TAG = "dht22";
@@ -97,7 +98,7 @@ static esp_err_t dht22_read_raw(uint8_t data[5])
 
     // Send start signal
     gpio_set_level(pin, 0);
-    ets_delay_us(DHT22_START_SIGNAL_US);
+    esp_rom_delay_us(DHT22_START_SIGNAL_US);
     gpio_set_level(pin, 1);
 
     // Wait for response
