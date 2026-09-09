@@ -1,0 +1,33 @@
+{
+  "schema_version": "telemetry.v1",
+  "telemetry_id": "01J0000000000000000000TEST",
+  "node_id": "NODE-001",
+  "sequence": 1,
+  "measurement_timestamp": "2026-09-09T15:30:00Z",
+  "received_timestamp": "2026-09-09T15:30:01Z",
+  "location": {
+    "lat": 12.9716,
+    "lon": 77.5946,
+    "alt": null
+  },
+  "measurements": {
+    "temp_c": 38.5,
+    "humidity_pct": 22.0,
+    "pressure_hpa": null,
+    "pm25_ug_m3": 145.3,
+    "pm10_ug_m3": null
+  },
+  "diagnostics": {
+    "uptime_s": 86400,
+    "self_test_passed": true,
+    "comm_integrity": 0.98,
+    "calibration_valid": true,
+    "stability_index": null
+  },
+  "power": {
+    "battery_pct": 87.5,
+    "battery_voltage": 3.72,
+    "solar_current": null
+  },
+  "source": "SIMULATION"
+}

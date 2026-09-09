@@ -1,0 +1,21 @@
+{
+  "scenario": "unhealthy_node",
+  "description": "Node with low reliability and degraded information condition",
+  "expected": "Regional fusion reduces trust weight, incident may not escalate",
+  "observations": [
+    {
+      "node_id": "NODE-009",
+      "hazard_type": "fire",
+      "state": "CONFIRMED",
+      "evidence": 0.78,
+      "confidence": 0.5,
+      "severity": 0.68,
+      "risk": 0.72,
+      "information_condition": "DEGRADED",
+      "observation_time": "2026-09-09T17:14:10.217203",
+      "location_lat": 12.9716,
+      "location_lon": 77.5946,
+      "node_reliability": 0.3
+    }
+  ]
+}

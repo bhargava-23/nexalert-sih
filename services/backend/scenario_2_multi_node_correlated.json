@@ -1,0 +1,49 @@
+{
+  "scenario": "multi_node_correlated",
+  "description": "Multiple nearby nodes with consistent fire detection",
+  "expected": "Regional incident created, state=ACTIVE",
+  "observations": [
+    {
+      "node_id": "NODE-002",
+      "hazard_type": "fire",
+      "state": "CONFIRMED",
+      "evidence": 0.75,
+      "confidence": 0.82,
+      "severity": 0.65,
+      "risk": 0.7,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:10.217203",
+      "location_lat": 12.9716,
+      "location_lon": 77.5946,
+      "node_reliability": 0.88
+    },
+    {
+      "node_id": "NODE-003",
+      "hazard_type": "fire",
+      "state": "CONFIRMED",
+      "evidence": 0.78,
+      "confidence": 0.85,
+      "severity": 0.68,
+      "risk": 0.72,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:20.217203",
+      "location_lat": 12.9717,
+      "location_lon": 77.5947,
+      "node_reliability": 0.9
+    },
+    {
+      "node_id": "NODE-004",
+      "hazard_type": "fire",
+      "state": "CONFIRMED",
+      "evidence": 0.72,
+      "confidence": 0.8,
+      "severity": 0.62,
+      "risk": 0.68,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:25.217203",
+      "location_lat": 12.9718,
+      "location_lon": 77.5948,
+      "node_reliability": 0.87
+    }
+  ]
+}

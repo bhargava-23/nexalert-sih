@@ -10,9 +10,11 @@
 #include "cJSON.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_random.h"
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#include <inttypes.h>
 
 static const char *TAG = "telemetry";
 
@@ -52,7 +54,7 @@ static void generate_ulid(char* out, size_t len)
 {
     uint64_t timestamp_ms = esp_timer_get_time() / 1000;
     uint32_t random = esp_random();
-    snprintf(out, len, "%016llX%010X", timestamp_ms, random);
+    snprintf(out, len, "%016" PRIX64 "%08" PRIX32, timestamp_ms, random);
 }
 
 /**

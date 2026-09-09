@@ -10,6 +10,7 @@
 #ifndef NEXALERT_MQTT_CLIENT_H
 #define NEXALERT_MQTT_CLIENT_H
 
+#include <stdbool.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus

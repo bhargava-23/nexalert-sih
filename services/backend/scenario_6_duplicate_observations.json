@@ -1,0 +1,35 @@
+{
+  "scenario": "duplicate_observations",
+  "description": "Same observation reported multiple times",
+  "expected": "Idempotent handling, single incident created",
+  "observations": [
+    {
+      "node_id": "NODE-010",
+      "hazard_type": "fire",
+      "state": "CONFIRMED",
+      "evidence": 0.75,
+      "confidence": 0.82,
+      "severity": 0.65,
+      "risk": 0.7,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:10.217203",
+      "location_lat": 12.9716,
+      "location_lon": 77.5946,
+      "node_reliability": 0.88
+    },
+    {
+      "node_id": "NODE-010",
+      "hazard_type": "fire",
+      "state": "CONFIRMED",
+      "evidence": 0.75,
+      "confidence": 0.82,
+      "severity": 0.65,
+      "risk": 0.7,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:10.217203",
+      "location_lat": 12.9716,
+      "location_lon": 77.5946,
+      "node_reliability": 0.88
+    }
+  ]
+}

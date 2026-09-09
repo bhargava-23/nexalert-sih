@@ -1,0 +1,65 @@
+{
+  "scenario": "incident_resolution",
+  "description": "Multiple nodes CONFIRMED then all RESOLVED",
+  "expected": "Incident state transitions to RESOLVED",
+  "initial_observations": [
+    {
+      "node_id": "NODE-011",
+      "hazard_type": "fire",
+      "state": "CONFIRMED",
+      "evidence": 0.75,
+      "confidence": 0.82,
+      "severity": 0.65,
+      "risk": 0.7,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:10.217203",
+      "location_lat": 12.9716,
+      "location_lon": 77.5946,
+      "node_reliability": 0.88
+    },
+    {
+      "node_id": "NODE-012",
+      "hazard_type": "fire",
+      "state": "CONFIRMED",
+      "evidence": 0.72,
+      "confidence": 0.8,
+      "severity": 0.62,
+      "risk": 0.68,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:10.217203",
+      "location_lat": 12.9717,
+      "location_lon": 77.5947,
+      "node_reliability": 0.87
+    }
+  ],
+  "resolved_observations": [
+    {
+      "node_id": "NODE-011",
+      "hazard_type": "fire",
+      "state": "RESOLVED",
+      "evidence": 0.15,
+      "confidence": 0.75,
+      "severity": 0.1,
+      "risk": 0.12,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:44:10.217203",
+      "location_lat": 12.9716,
+      "location_lon": 77.5946,
+      "node_reliability": 0.88
+    },
+    {
+      "node_id": "NODE-012",
+      "hazard_type": "fire",
+      "state": "RESOLVED",
+      "evidence": 0.12,
+      "confidence": 0.78,
+      "severity": 0.08,
+      "risk": 0.1,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:44:10.217203",
+      "location_lat": 12.9717,
+      "location_lon": 77.5947,
+      "node_reliability": 0.87
+    }
+  ]
+}

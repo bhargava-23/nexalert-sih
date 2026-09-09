@@ -1,0 +1,16 @@
+INFO:     Started server process [38616]
+INFO:     Waiting for application startup.
+2026-09-10 01:33:24,203 - main - INFO - Starting NexAlert Backend...
+2026-09-10 01:33:24,203 - main - INFO - Connecting to database: postgresql+asyncpg://nexalert:nexalert_dev_password@localhost:5432/nexalert_dev
+2026-09-10 01:33:24,264 - main - INFO - Database connection established
+2026-09-10 01:33:24,265 - main - INFO - Starting MQTT telemetry consumer...
+2026-09-10 01:33:24,266 - modules.ingestion.validator - INFO - Loaded telemetry schema from ../../schemas/telemetry-envelope.schema.json
+2026-09-10 01:33:24,266 - modules.ingestion.mqtt_consumer - INFO - Starting MQTT consumer: broker=localhost:1883, topic=Nexalert/telemetry/node1, client_id=nexalert-backend
+2026-09-10 01:33:24,273 - modules.ingestion.mqtt_consumer - INFO - MQTT consumer started successfully
+2026-09-10 01:33:24,273 - main - INFO - MQTT consumer started
+2026-09-10 01:33:24,273 - main - INFO - NexAlert Backend started successfully
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-09-10 01:33:24,278 - modules.ingestion.mqtt_consumer - INFO - MQTT connected to localhost:1883. Subscribing to: Nexalert/telemetry/node1
+2026-09-10 01:34:34,351 - modules.api.routes_c - INFO - Starting fire simulation at (12.9716, 77.5946), type=SIMULATION
+2026-09-10 01:34:34,468 - modules.api.routes_c - INFO - Fire simulation created: 6b914330-f6e8-4ead-8c55-e93a147ac2bc

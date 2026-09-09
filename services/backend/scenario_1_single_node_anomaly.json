@@ -1,0 +1,21 @@
+{
+  "scenario": "single_node_anomaly",
+  "description": "One healthy node with anomalous reading",
+  "expected": "Local hazard only, no regional incident",
+  "observations": [
+    {
+      "node_id": "NODE-001",
+      "hazard_type": "fire",
+      "state": "SUSPECTED",
+      "evidence": 0.45,
+      "confidence": 0.75,
+      "severity": 0.3,
+      "risk": 0.35,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:10.217203",
+      "location_lat": 12.9716,
+      "location_lon": 77.5946,
+      "node_reliability": 0.85
+    }
+  ]
+}

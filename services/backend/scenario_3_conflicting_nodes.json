@@ -1,0 +1,35 @@
+{
+  "scenario": "conflicting_nodes",
+  "description": "One node CONFIRMED, nearby node NORMAL",
+  "expected": "Both local states preserved, regional fusion reflects mixed evidence",
+  "observations": [
+    {
+      "node_id": "NODE-005",
+      "hazard_type": "fire",
+      "state": "CONFIRMED",
+      "evidence": 0.8,
+      "confidence": 0.85,
+      "severity": 0.7,
+      "risk": 0.75,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:10.217203",
+      "location_lat": 12.9716,
+      "location_lon": 77.5946,
+      "node_reliability": 0.88
+    },
+    {
+      "node_id": "NODE-006",
+      "hazard_type": "fire",
+      "state": "NORMAL",
+      "evidence": 0.1,
+      "confidence": 0.7,
+      "severity": 0.05,
+      "risk": 0.08,
+      "information_condition": "GOOD",
+      "observation_time": "2026-09-09T17:14:10.217203",
+      "location_lat": 12.9717,
+      "location_lon": 77.5947,
+      "node_reliability": 0.85
+    }
+  ]
+}
