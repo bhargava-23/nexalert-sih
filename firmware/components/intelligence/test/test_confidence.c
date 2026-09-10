@@ -307,7 +307,7 @@ void test_temporal_fresh(void)
 {
     printf("\nTest 10: Temporal - fresh data\n");
 
-    float c_temp = compute_temporal(10.0f, 300.0f);
+    float c_temp = compute_temporal_confidence(10.0f, 300.0f);
 
     ASSERT_FLOAT_EQ(0.966667f, c_temp, "C_temp ≈ 0.9667 (fresh)");
 }
@@ -323,7 +323,7 @@ void test_temporal_stale(void)
 {
     printf("\nTest 11: Temporal - stale data\n");
 
-    float c_temp = compute_temporal(400.0f, 300.0f);
+    float c_temp = compute_temporal_confidence(400.0f, 300.0f);
 
     ASSERT_FLOAT_EQ(0.0f, c_temp, "C_temp = 0.0 (stale)");
 }
@@ -339,7 +339,7 @@ void test_temporal_missing(void)
 {
     printf("\nTest 12: Temporal - missing age\n");
 
-    float c_temp = compute_temporal(NAN, 300.0f);
+    float c_temp = compute_temporal_confidence(NAN, 300.0f);
 
     ASSERT_FLOAT_EQ(0.0f, c_temp, "C_temp = 0.0 (missing)");
 }
@@ -355,7 +355,7 @@ void test_temporal_invalid(void)
 {
     printf("\nTest 13: Temporal - invalid age\n");
 
-    float c_temp = compute_temporal(-10.0f, 300.0f);
+    float c_temp = compute_temporal_confidence(-10.0f, 300.0f);
 
     ASSERT_FLOAT_EQ(0.0f, c_temp, "C_temp = 0.0 (invalid)");
 }
@@ -572,7 +572,7 @@ void test_temporal_boundary(void)
 {
     printf("\nTest 24: Temporal - exact boundary\n");
 
-    float c_temp = compute_temporal(300.0f, 300.0f);
+    float c_temp = compute_temporal_confidence(300.0f, 300.0f);
 
     ASSERT_FLOAT_EQ(0.0f, c_temp, "C_temp = 0.0 (boundary)");
 }
@@ -636,7 +636,7 @@ void test_temporal_very_fresh(void)
 {
     printf("\nTest 28: Temporal - very fresh data\n");
 
-    float c_temp = compute_temporal(0.0f, 300.0f);
+    float c_temp = compute_temporal_confidence(0.0f, 300.0f);
 
     ASSERT_FLOAT_EQ(1.0f, c_temp, "C_temp = 1.0 (very fresh)");
 }

@@ -156,7 +156,7 @@ float compute_flood_intensity(
  * Provenance: max_rate values are PROTOTYPE ASSUMPTIONS
  * Validation Status: UNVALIDATED
  */
-float compute_temporal(
+float compute_temporal_severity(
     float current,
     float previous,
     float time_delta_seconds,

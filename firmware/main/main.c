@@ -60,7 +60,7 @@ static node_config_complete_t g_config;
 
 // Intelligence pipeline state (persistent across samples)
 // Baseline state (ENUM, not struct with .status field)
-static baseline_state_t baseline_current_state = BASELINE_STATE_INITIALIZING;
+static baseline_state_t baseline_current_state = BASELINE_INITIALIZING;
 static baseline_stats_t baseline_stats[2] = {0};  // Per-sensor baseline stats
 static uint16_t baseline_sample_count = 0;
 
@@ -209,11 +209,6 @@ static void send_heartbeat_if_due(void)
 /**
  * Helper: Check if baseline should freeze based on hazard state
  */
-static bool should_freeze_baseline(hazard_state_t state)
-{
-    return (state >= HAZARD_STATE_SUSPECTED);
-}
-
 /**
  * Main sampling task: Complete intelligence pipeline
  */
@@ -367,12 +362,12 @@ static void sampling_task(void *pvParameters)
         baseline_result_t z_temp_result = {.z_score = 0.0f, .valid = false};
         baseline_result_t z_humid_result = {.z_score = 0.0f, .valid = false};
 
-        if (baseline_current_state >= BASELINE_STATE_READY && !isnan(temp_c)) {
+        if (baseline_current_state >= BASELINE_READY && !isnan(temp_c)) {
             // baseline_stats[0] would need to be populated with compute_robust_baseline()
             // Passing uninitialized stats returns invalid, preserving missing != zero
             z_temp_result = compute_baseline_z_score(temp_c, &baseline_stats[0]);
         }
-        if (baseline_current_state >= BASELINE_STATE_READY && !isnan(humidity_pct)) {
+        if (baseline_current_state >= BASELINE_READY && !isnan(humidity_pct)) {
             z_humid_result = compute_baseline_z_score(humidity_pct, &baseline_stats[1]);
         }
 
@@ -454,9 +449,9 @@ static void sampling_task(void *pvParameters)
 
         // c_base: Baseline confidence (maps baseline readiness)
         float c_base = NAN;
-        if (baseline_current_state == BASELINE_STATE_READY) {
+        if (baseline_current_state == BASELINE_READY) {
             c_base = 1.0f;  // Baseline ready
-        } else if (baseline_current_state == BASELINE_STATE_LEARNING) {
+        } else if (baseline_current_state == BASELINE_LEARNING) {
             c_base = 0.5f;  // Baseline learning
         } else {
             c_base = 0.0f;  // Baseline not ready
@@ -498,9 +493,9 @@ static void sampling_task(void *pvParameters)
         float d_h = NAN;  // No duration tracking yet
 
         severity_weights_t sev_weights = {
-            .intensity = 0.5f,  // NOT w_intensity
-            .temporal = 0.3f,   // NOT w_temporal
-            .duration = 0.2f,   // NOT w_duration
+            .w_I = 0.5f,  // Intensity weight
+            .w_T = 0.3f,  // Temporal weight
+            .w_D = 0.2f,  // Duration weight
         };
 
         severity_result_t severity = compute_severity(i_h_fire, t_h, d_h, &sev_weights, 1e-9f);
@@ -695,12 +690,12 @@ void app_main(void)
     ESP_LOGI(TAG, "Wi-Fi connected: %s", ip);
 
     // MQTT with LOCKED TOPIC FORMAT
-    mqtt_config_t mqtt_cfg = {
+    mqtt_init_params_t mqtt_params = {
         .broker_host = g_config.mqtt.broker_host,
         .broker_port = g_config.mqtt.broker_port,
         .node_id = g_config.identity.node_id,
     };
-    ESP_ERROR_CHECK(mqtt_client_init(&mqtt_cfg));
+    ESP_ERROR_CHECK(mqtt_client_init(&mqtt_params));
 
     ESP_LOGI(TAG, "Waiting for MQTT connection...");
     int mqtt_wait = 0;

@@ -7,8 +7,8 @@
  * QoS: 1 (at least once delivery)
  */
 
-#ifndef NEXALERT_MQTT_CLIENT_H
-#define NEXALERT_MQTT_CLIENT_H
+#ifndef NEXALERT_MQTT_H
+#define NEXALERT_MQTT_H
 
 #include <stdbool.h>
 #include "esp_err.h"
@@ -18,21 +18,23 @@ extern "C" {
 #endif
 
 /**
- * MQTT configuration
+ * MQTT initialization parameters (internal to network module)
+ * NOTE: node_config.h has a separate mqtt_config_t with full broker configuration.
+ * This struct is for mqtt_client_init() only.
  */
 typedef struct {
     const char* broker_host;     // MQTT broker hostname/IP
     uint16_t broker_port;        // MQTT broker port (default 1883)
     const char* node_id;         // Node ID for topic generation
-} mqtt_config_t;
+} mqtt_init_params_t;
 
 /**
  * Initialize MQTT client
  *
- * @param config MQTT configuration
+ * @param params MQTT initialization parameters
  * @return ESP_OK on success, error code otherwise
  */
-esp_err_t mqtt_client_init(const mqtt_config_t* config);
+esp_err_t mqtt_client_init(const mqtt_init_params_t* params);
 
 /**
  * Publish telemetry JSON to MQTT
@@ -63,4 +65,4 @@ esp_err_t mqtt_client_deinit(void);
 }
 #endif
 
-#endif // NEXALERT_MQTT_CLIENT_H
+#endif // NEXALERT_MQTT_H

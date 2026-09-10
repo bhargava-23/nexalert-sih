@@ -200,7 +200,7 @@ void test_flood_intensity_water_only(void)
  * Test 9: Temporal - nominal rate
  *
  * Python equivalent:
- *   compute_temporal(70.0, 60.0, 60.0, 0.167) → 1.0
+ *   compute_temporal_severity(70.0, 60.0, 60.0, 0.167) → 1.0
  *   rate = abs(70-60)/60 = 0.167
  *   T_h = min(0.167/0.167, 1.0) = 1.0
  */
@@ -208,7 +208,7 @@ void test_temporal_nominal(void)
 {
     printf("\nTest 9: Temporal - nominal rate\n");
 
-    float t_h = compute_temporal(70.0f, 60.0f, 60.0f, 0.167f, 0.0f);
+    float t_h = compute_temporal_severity(70.0f, 60.0f, 60.0f, 0.167f, 0.0f);
 
     ASSERT_FLOAT_EQ(1.0f, t_h, "T_h = 1.0");
 }
@@ -217,7 +217,7 @@ void test_temporal_nominal(void)
  * Test 10: Temporal - slower rate
  *
  * Python equivalent:
- *   compute_temporal(65.0, 60.0, 120.0, 0.167) → 0.25
+ *   compute_temporal_severity(65.0, 60.0, 120.0, 0.167) → 0.25
  *   rate = abs(65-60)/120 = 0.0417
  *   T_h = 0.0417/0.167 = 0.25
  */
@@ -225,7 +225,7 @@ void test_temporal_slower(void)
 {
     printf("\nTest 10: Temporal - slower rate\n");
 
-    float t_h = compute_temporal(65.0f, 60.0f, 120.0f, 0.167f, 0.0f);
+    float t_h = compute_temporal_severity(65.0f, 60.0f, 120.0f, 0.167f, 0.0f);
 
     ASSERT_FLOAT_EQ(0.25f, t_h, "T_h = 0.25");
 }
@@ -234,13 +234,13 @@ void test_temporal_slower(void)
  * Test 11: Temporal - missing current
  *
  * Python equivalent:
- *   compute_temporal(None, 60.0, 60.0, 0.167) → None
+ *   compute_temporal_severity(None, 60.0, 60.0, 0.167) → None
  */
 void test_temporal_missing_current(void)
 {
     printf("\nTest 11: Temporal - missing current\n");
 
-    float t_h = compute_temporal(NAN, 60.0f, 60.0f, 0.167f, 0.0f);
+    float t_h = compute_temporal_severity(NAN, 60.0f, 60.0f, 0.167f, 0.0f);
 
     ASSERT_NAN(t_h, "T_h = NAN (current missing)");
 }
@@ -249,13 +249,13 @@ void test_temporal_missing_current(void)
  * Test 12: Temporal - no time elapsed
  *
  * Python equivalent:
- *   compute_temporal(70.0, 60.0, 0.0, 0.167) → 0.0
+ *   compute_temporal_severity(70.0, 60.0, 0.0, 0.167) → 0.0
  */
 void test_temporal_no_time(void)
 {
     printf("\nTest 12: Temporal - no time elapsed\n");
 
-    float t_h = compute_temporal(70.0f, 60.0f, 0.0f, 0.167f, 0.0f);
+    float t_h = compute_temporal_severity(70.0f, 60.0f, 0.0f, 0.167f, 0.0f);
 
     ASSERT_FLOAT_EQ(0.0f, t_h, "T_h = 0.0 (no time)");
 }
@@ -264,13 +264,13 @@ void test_temporal_no_time(void)
  * Test 13: Temporal - data stale
  *
  * Python equivalent:
- *   compute_temporal(70.0, 60.0, 400.0, 0.167, 300.0) → 0.0
+ *   compute_temporal_severity(70.0, 60.0, 400.0, 0.167, 300.0) → 0.0
  */
 void test_temporal_stale(void)
 {
     printf("\nTest 13: Temporal - data stale\n");
 
-    float t_h = compute_temporal(70.0f, 60.0f, 400.0f, 0.167f, 300.0f);
+    float t_h = compute_temporal_severity(70.0f, 60.0f, 400.0f, 0.167f, 300.0f);
 
     ASSERT_FLOAT_EQ(0.0f, t_h, "T_h = 0.0 (stale)");
 }

@@ -129,7 +129,7 @@ float compute_flood_intensity(
     return max_intensity;
 }
 
-float compute_temporal(
+float compute_temporal_severity(
     float current,
     float previous,
     float time_delta_seconds,

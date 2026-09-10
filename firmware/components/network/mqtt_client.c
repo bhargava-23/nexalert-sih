@@ -12,6 +12,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include <string.h>
+#include <inttypes.h>
 
 static const char *TAG = "mqtt";
 
@@ -55,24 +56,24 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
         break;
 
     default:
-        ESP_LOGD(TAG, "MQTT event: %d", event_id);
+        ESP_LOGD(TAG, "MQTT event: %" PRId32, (int32_t)event_id);
         break;
     }
 }
 
-esp_err_t mqtt_client_init(const mqtt_config_t* config)
+esp_err_t mqtt_client_init(const mqtt_init_params_t* params)
 {
-    if (config == NULL || config->broker_host == NULL || config->node_id == NULL) {
+    if (params == NULL || params->broker_host == NULL || params->node_id == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     // Build MQTT URI
     char uri[128];
-    snprintf(uri, sizeof(uri), "mqtt://%s:%d", config->broker_host, config->broker_port);
+    snprintf(uri, sizeof(uri), "mqtt://%s:%d", params->broker_host, params->broker_port);
 
     // Use locked topic format: Nexalert/telemetry/node1
     snprintf(mqtt_state.topic, sizeof(mqtt_state.topic),
-             "Nexalert/telemetry/%s", config->node_id);
+             "Nexalert/telemetry/%s", params->node_id);
 
     // Configure MQTT client
     esp_mqtt_client_config_t mqtt_cfg = {

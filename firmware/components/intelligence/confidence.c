@@ -112,7 +112,7 @@ float compute_agreement(
     return c_agree;
 }
 
-float compute_temporal(
+float compute_temporal_confidence(
     float telemetry_age_seconds,
     float max_age_seconds
 )

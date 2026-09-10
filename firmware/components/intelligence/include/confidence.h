@@ -149,7 +149,7 @@ float compute_agreement(
  *
  * Provenance: max_age_seconds = 300 is PROTOTYPE ASSUMPTION
  */
-float compute_temporal(
+float compute_temporal_confidence(
     float telemetry_age_seconds,
     float max_age_seconds
 );
