@@ -409,6 +409,24 @@ class B2Coordinator:
 
         await session.commit()
 
+        # Track C Integration Hook: Trigger fire simulation for FIRE incidents
+        if hazard_type.upper() == "FIRE":
+            try:
+                from modules.simulation.c_coordinator import get_c_coordinator
+                c_coord = get_c_coordinator()
+                await c_coord.on_incident_created(
+                    session,
+                    incident.incident_id,
+                    {
+                        "hazard_type": hazard_type,
+                        "centroid_lat": fusion_result.centroid_lat,
+                        "centroid_lon": fusion_result.centroid_lon,
+                        "confidence": fusion_result.regional_confidence
+                    }
+                )
+            except Exception as c_error:
+                logger.warning(f"Track C trigger failed (non-blocking): {str(c_error)}")
+
     async def _update_incident(
         self,
         session: AsyncSession,
