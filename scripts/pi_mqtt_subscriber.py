@@ -27,7 +27,7 @@ logger = logging.getLogger('nexalert-subscriber')
 # MQTT Configuration
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
-MQTT_TOPIC = "nexalert/nodes/+/telemetry"  # Subscribe to all nodes
+MQTT_TOPIC = "Nexalert/telemetry/+"  # Subscribe to all nodes (canonical format)
 MQTT_CLIENT_ID = "nexalert-pi-subscriber"
 
 # Schema path (relative to this file)

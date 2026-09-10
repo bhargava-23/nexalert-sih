@@ -1,5 +1,5 @@
 /**
- * @file mqtt_client.h
+ * @file nexalert_mqtt.h
  * @brief MQTT publisher for NexAlert telemetry
  *
  * Publishes telemetry envelopes to local Mosquitto broker on Raspberry Pi.

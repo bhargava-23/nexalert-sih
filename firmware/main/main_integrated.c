@@ -33,7 +33,7 @@
 // Telemetry and network
 #include "telemetry_envelope.h"
 #include "wifi_station.h"
-#include "mqtt_client.h"
+#include "nexalert_mqtt.h"
 
 // Configuration and resilience
 #include "node_config.h"

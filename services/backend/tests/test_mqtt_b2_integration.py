@@ -28,7 +28,7 @@ from modules.intelligence.b2_coordinator import get_coordinator
 # Test configuration
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
-MQTT_TOPIC = "nexalert/telemetry"
+MQTT_TOPIC = "Nexalert/telemetry/+"  # Match all node IDs (canonical format)
 
 
 @pytest.fixture

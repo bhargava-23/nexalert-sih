@@ -33,7 +33,7 @@
 // Telemetry and network
 #include "telemetry_envelope.h"
 #include "wifi_station.h"
-#include "mqtt_client.h"
+#include "nexalert_mqtt.h"
 
 // Configuration and resilience
 #include "node_config.h"
@@ -59,8 +59,12 @@ static const char *TAG = "main";
 static node_config_complete_t g_config;
 
 // Intelligence pipeline state (persistent across samples)
-static baseline_state_t baseline_state = {0};
-static anomaly_state_t anomaly_state = {0};
+// Baseline state (ENUM, not struct with .status field)
+static baseline_state_t baseline_current_state = BASELINE_STATE_INITIALIZING;
+static baseline_stats_t baseline_stats[2] = {0};  // Per-sensor baseline stats
+static uint16_t baseline_sample_count = 0;
+
+// Note: anomaly module is stateless (no anomaly_state_t type exists)
 static hazard_state_t hazard_current_state = HAZARD_STATE_NORMAL;
 static uint16_t hazard_persistence_counter = 0;
 static float hazard_resolved_hold_start = NAN;
@@ -203,6 +207,14 @@ static void send_heartbeat_if_due(void)
 }
 
 /**
+ * Helper: Check if baseline should freeze based on hazard state
+ */
+static bool should_freeze_baseline(hazard_state_t state)
+{
+    return (state >= HAZARD_STATE_SUSPECTED);
+}
+
+/**
  * Main sampling task: Complete intelligence pipeline
  */
 static void sampling_task(void *pvParameters)
@@ -236,23 +248,8 @@ static void sampling_task(void *pvParameters)
         return;
     }
 
-    // Initialize baseline with configuration
-    baseline_config_t baseline_cfg = {
-        .window_size = g_config.intelligence.baseline_window,
-        .alpha = g_config.intelligence.baseline_alpha,
-    };
-    baseline_state_init(&baseline_state, &baseline_cfg);
-
-    // Initialize anomaly with configuration
-    anomaly_config_t anomaly_cfg = {
-        .lambda = g_config.intelligence.anomaly_lambda,
-        .z_cap = g_config.intelligence.anomaly_z_cap,
-    };
-    anomaly_state_init(&anomaly_state, &anomaly_cfg);
-
     ESP_LOGI(TAG, "Intelligence pipeline initialized");
-    ESP_LOGI(TAG, "Baseline: window=%u, alpha=%.3f", baseline_cfg.window_size, baseline_cfg.alpha);
-    ESP_LOGI(TAG, "Anomaly: lambda=%.3f, z_cap=%.3f", anomaly_cfg.lambda, anomaly_cfg.z_cap);
+    ESP_LOGI(TAG, "Baseline: state=%s, samples=%u", baseline_state_name(baseline_current_state), baseline_sample_count);
 
     while (1) {
         g_sample_count++;
@@ -284,158 +281,262 @@ static void sampling_task(void *pvParameters)
         // ========== INTELLIGENCE PIPELINE ==========
 
         // GATE 1: Health (H_i) - per sensor
-        float H_temp = compute_health(temp_c, temp_cal.valid, 1.0f);
-        float H_humid = compute_health(humidity_pct, humid_cal.valid, 1.0f);
+        // Current API: health_result_t compute_health(const health_diagnostic_t* diagnostics, uint8_t num_diagnostics, bool hard_failure)
+        health_diagnostic_t temp_diagnostics[] = {
+            {.key = "calibration", .value = temp_cal.valid ? 1.0f : 0.0f, .weight = 0.5f},
+            {.key = "reading", .value = temp_reading.valid ? 1.0f : 0.0f, .weight = 0.5f},
+        };
+        health_result_t H_temp_result = compute_health(temp_diagnostics, 2, false);
+
+        health_diagnostic_t humid_diagnostics[] = {
+            {.key = "calibration", .value = humid_cal.valid ? 1.0f : 0.0f, .weight = 0.5f},
+            {.key = "reading", .value = humid_reading.valid ? 1.0f : 0.0f, .weight = 0.5f},
+        };
+        health_result_t H_humid_result = compute_health(humid_diagnostics, 2, false);
+
+        float H_temp = H_temp_result.complete ? H_temp_result.h_i : NAN;
+        float H_humid = H_humid_result.complete ? H_humid_result.h_i : NAN;
         ESP_LOGD(TAG, "Health: H_temp=%.3f, H_humid=%.3f", H_temp, H_humid);
 
         // GATE 2: Quality (Q_i) - per sensor
-        float Q_temp = compute_quality(temp_c, temp_cal.valid);
-        float Q_humid = compute_quality(humidity_pct, humid_cal.valid);
+        // Current API: quality_result_t compute_quality(float q_integrity, float q_stability)
+        // q_integrity: 1.0 if valid reading, NAN if missing
+        // q_stability: Requires signal variance history - PROTOTYPE LIMITATION: use NAN (not available)
+        float q_integrity_temp = temp_reading.valid ? 1.0f : NAN;
+        float q_stability_temp = NAN;  // PROTOTYPE: No variance history yet
+        quality_result_t Q_temp_result = compute_quality(q_integrity_temp, q_stability_temp);
+
+        float q_integrity_humid = humid_reading.valid ? 1.0f : NAN;
+        float q_stability_humid = NAN;  // PROTOTYPE: No variance history yet
+        quality_result_t Q_humid_result = compute_quality(q_integrity_humid, q_stability_humid);
+
+        float Q_temp = Q_temp_result.valid ? Q_temp_result.q_i : NAN;
+        float Q_humid = Q_humid_result.valid ? Q_humid_result.q_i : NAN;
         ESP_LOGD(TAG, "Quality: Q_temp=%.3f, Q_humid=%.3f", Q_temp, Q_humid);
 
         // GATE 3: Reliability (R_i) - per sensor
-        float R_temp = compute_reliability(temp_c, temp_cal.valid, H_temp, Q_temp);
-        float R_humid = compute_reliability(humidity_pct, humid_cal.valid, H_humid, Q_humid);
+        // Current API: reliability_result_t compute_reliability(float h_i, float q_i, float k_i)
+        // K_i is explicit calibration validity - NO hard-coded default (Doc 04 Sec 3.3)
+        // If uncalibrated, K_i should be NAN (missing), NOT an invented "partially good" value
+        float K_temp = temp_cal.valid ? 1.0f : NAN;  // Uncalibrated = missing
+        float K_humid = humid_cal.valid ? 1.0f : NAN;
+
+        reliability_result_t R_temp_result = compute_reliability(H_temp, Q_temp, K_temp);
+        reliability_result_t R_humid_result = compute_reliability(H_humid, Q_humid, K_humid);
+
+        float R_temp = R_temp_result.valid ? R_temp_result.r_i : NAN;
+        float R_humid = R_humid_result.valid ? R_humid_result.r_i : NAN;
         ESP_LOGD(TAG, "Reliability: R_temp=%.3f, R_humid=%.3f", R_temp, R_humid);
 
-        // GATE 4: Baseline (B_i) - per sensor
-        // Check if baseline should be frozen due to hazard state
+        // GATE 4: Baseline (B_i) and state management
+        // Current API: baseline_result_t compute_baseline_z_score(float value, const baseline_stats_t* stats)
+        // Current API: baseline_state_result_t update_baseline_state(...)
+        // CRITICAL: baseline_current_state is an ENUM, not a struct with .status field
+
+        baseline_sample_count++;
+
+        // Get baseline configuration with CORRECT fields from baseline.h
+        baseline_config_t baseline_cfg = baseline_default_config();
+        // baseline_config_t has: min_samples_init, min_samples_learning, recovery_stability_samples, max_history, epsilon
+        // NO window_size or alpha fields exist
+
+        // Check if baseline should freeze
         bool should_freeze = should_freeze_baseline(hazard_current_state);
-        if (should_freeze && baseline_state.status != BASELINE_STATUS_FROZEN) {
-            ESP_LOGI(TAG, "Freezing baseline (hazard state: %s)",
-                     hazard_state_name(hazard_current_state));
-            baseline_state.status = BASELINE_STATUS_FROZEN;
+
+        // Update baseline state
+        const char* hazard_state_str = hazard_state_name(hazard_current_state);
+
+        baseline_state_result_t baseline_transition = update_baseline_state(
+            baseline_current_state,
+            baseline_sample_count,
+            &baseline_cfg,
+            hazard_state_str,
+            hazard_persistence_counter
+        );
+
+        if (baseline_transition.transition_occurred) {
+            ESP_LOGI(TAG, "Baseline state transition: %s → %s",
+                     baseline_state_name(baseline_current_state),
+                     baseline_state_name(baseline_transition.new_state));
+            baseline_current_state = baseline_transition.new_state;
         }
 
-        float B_temp = NAN, B_humid = NAN;
-        if (!should_freeze || baseline_state.status == BASELINE_STATUS_FROZEN) {
-            B_temp = baseline_update(&baseline_state, 0, temp_c, R_temp);
-            B_humid = baseline_update(&baseline_state, 1, humidity_pct, R_humid);
+        // PROTOTYPE LIMITATION: Baseline stats computation not yet implemented
+        // Would need to accumulate sample history and call compute_robust_baseline()
+        // For now, z-scores will be invalid until baseline stats are populated
+        baseline_result_t z_temp_result = {.z_score = 0.0f, .valid = false};
+        baseline_result_t z_humid_result = {.z_score = 0.0f, .valid = false};
+
+        if (baseline_current_state >= BASELINE_STATE_READY && !isnan(temp_c)) {
+            // baseline_stats[0] would need to be populated with compute_robust_baseline()
+            // Passing uninitialized stats returns invalid, preserving missing != zero
+            z_temp_result = compute_baseline_z_score(temp_c, &baseline_stats[0]);
         }
-        ESP_LOGD(TAG, "Baseline: B_temp=%.3f, B_humid=%.3f, status=%d",
-                 B_temp, B_humid, baseline_state.status);
+        if (baseline_current_state >= BASELINE_STATE_READY && !isnan(humidity_pct)) {
+            z_humid_result = compute_baseline_z_score(humidity_pct, &baseline_stats[1]);
+        }
+
+        float z_temp = z_temp_result.valid ? z_temp_result.z_score : NAN;
+        float z_humid = z_humid_result.valid ? z_humid_result.z_score : NAN;
+        ESP_LOGD(TAG, "Baseline: z_temp=%.3f, z_humid=%.3f, state=%s",
+                 z_temp, z_humid, baseline_state_name(baseline_current_state));
 
         // GATE 5: Anomaly (A_i, A_node, A_h)
-        float A_temp = anomaly_compute_sensor(&anomaly_state, 0, temp_c, B_temp, R_temp);
-        float A_humid = anomaly_compute_sensor(&anomaly_state, 1, humidity_pct, B_humid, R_humid);
-        float A_node = anomaly_compute_node(&anomaly_state);
+        // Current API: individual_anomaly_result_t compute_individual_anomaly(float z_score, float lambda_param, float z_cap)
+        float lambda = 2.0f;  // ANOMALY_LAMBDA_DEFAULT
+        float z_cap = 5.0f;   // ANOMALY_Z_CAP_DEFAULT
 
-        // Hazard-specific anomaly (fire detection via temperature anomaly)
-        float A_h_fire = A_temp;  // Fire primarily detected via temperature
+        individual_anomaly_result_t A_temp_result = compute_individual_anomaly(z_temp, lambda, z_cap);
+        individual_anomaly_result_t A_humid_result = compute_individual_anomaly(z_humid, lambda, z_cap);
+
+        float A_temp = A_temp_result.valid ? A_temp_result.a_i : NAN;
+        float A_humid = A_humid_result.valid ? A_humid_result.a_i : NAN;
+
+        // Node aggregate anomaly
+        sensor_anomaly_t sensor_anomalies[] = {
+            {.a_i = A_temp, .r_i = R_temp, .w_ih = NAN},
+            {.a_i = A_humid, .r_i = R_humid, .w_ih = NAN},
+        };
+        node_anomaly_result_t A_node_result = compute_node_aggregate_anomaly(sensor_anomalies, 2, 1e-9f);
+        float A_node = A_node_result.valid ? A_node_result.a_node : NAN;
+
+        // Hazard-specific anomaly (fire: temperature is primary)
+        sensor_anomaly_t fire_anomalies[] = {
+            {.a_i = A_temp, .r_i = R_temp, .w_ih = 0.8f},   // Temperature primary for fire
+            {.a_i = A_humid, .r_i = R_humid, .w_ih = 0.2f}, // Humidity secondary
+        };
+        hazard_anomaly_result_t A_h_result = compute_hazard_specific_anomaly(fire_anomalies, 2, 1e-9f);
+        float A_h_fire = A_h_result.valid ? A_h_result.a_h : NAN;
+
         ESP_LOGD(TAG, "Anomaly: A_temp=%.3f, A_humid=%.3f, A_node=%.3f, A_h_fire=%.3f",
                  A_temp, A_humid, A_node, A_h_fire);
 
-        // GATE 6A: Evidence (E_h) - fire hazard
-        sensor_evidence_t temp_evidence = {
-            .sensor_id = 0,
-            .measurement = temp_c,
-            .anomaly = A_temp,
-            .reliability = R_temp,
-            .weight = 0.7f,  // Temperature primary for fire
-        };
-        sensor_evidence_t humid_evidence = {
-            .sensor_id = 1,
-            .measurement = humidity_pct,
-            .anomaly = A_humid,
-            .reliability = R_humid,
-            .weight = 0.3f,  // Humidity secondary
-        };
-        sensor_evidence_t evidences[] = {temp_evidence, humid_evidence};
+        // GATE 6A: Evidence (E_h)
+        // Current API: evidence_result_t compute_evidence(const sensor_reading_t* readings, uint8_t reading_count, const evidence_config_t* config, float epsilon)
 
-        float E_h = compute_evidence(evidences, 2);
+        // Create evidence configuration (simplified for fire detection)
+        evidence_config_t evidence_cfg = {
+            .core_rules = {
+                {.sensor = "temperature", .threshold_min = 40.0f, .threshold_max = 100.0f, .weight = 0.7f},
+            },
+            .core_rule_count = 1,
+            .supporting_rules = {
+                {.sensor = "humidity", .threshold_min = 0.0f, .threshold_max = 30.0f, .weight = 0.3f},
+            },
+            .supporting_rule_count = 1,
+            .core_floor = {.min_core_coverage = 0.5f, .cap_without_core = 0.3f},
+            .use_core_floor = true,
+        };
+
+        sensor_reading_t evidence_readings[] = {
+            {.sensor = "temperature", .value = temp_c},
+            {.sensor = "humidity", .value = humidity_pct},
+        };
+
+        evidence_result_t E_h_result = compute_evidence(evidence_readings, 2, &evidence_cfg, 1e-9f);
+        float E_h = E_h_result.valid ? E_h_result.e_h : NAN;
         ESP_LOGD(TAG, "Evidence: E_h=%.3f", E_h);
 
         // GATE 6B: Confidence (C_h)
-        sensor_availability_t temp_avail = {.sensor_id = 0, .available = !isnan(temp_c), .weight = 0.7f};
-        sensor_availability_t humid_avail = {.sensor_id = 1, .available = !isnan(humidity_pct), .weight = 0.3f};
-        sensor_availability_t availability[] = {temp_avail, humid_avail};
+        // Current API: confidence_result_t compute_confidence(float c_cov, float c_agree, float c_temp, float c_base, const confidence_weights_t* weights, float epsilon)
 
-        evidence_group_t evidence_group = {
-            .values = (float[]){isnan(temp_c) ? NAN : A_temp, isnan(humidity_pct) ? NAN : A_humid},
-            .count = 2,
-        };
+        // Compute confidence components
+        // c_cov: Coverage confidence (sensor availability)
+        float c_cov = 0.0f;
+        if (!isnan(temp_c)) c_cov += 0.7f;  // Temperature available
+        if (!isnan(humidity_pct)) c_cov += 0.3f;  // Humidity available
+
+        // c_agree: Group-level agreement (PROTOTYPE LIMITATION: requires multi-sensor variance, not yet implemented)
+        float c_agree = NAN;  // No multi-sensor variance computation yet
+
+        // c_temp: Temporal confidence (PROTOTYPE LIMITATION: requires freshness tracking, not yet implemented)
+        float c_temp = NAN;  // No measurement age tracking yet
+
+        // c_base: Baseline confidence (maps baseline readiness)
+        float c_base = NAN;
+        if (baseline_current_state == BASELINE_STATE_READY) {
+            c_base = 1.0f;  // Baseline ready
+        } else if (baseline_current_state == BASELINE_STATE_LEARNING) {
+            c_base = 0.5f;  // Baseline learning
+        } else {
+            c_base = 0.0f;  // Baseline not ready
+        }
 
         confidence_weights_t conf_weights = {
-            .w_coverage = g_config.intelligence.confidence_w_cov,
-            .w_agreement = g_config.intelligence.confidence_w_agree,
-            .w_temporal = g_config.intelligence.confidence_w_temp,
-            .w_baseline = g_config.intelligence.confidence_w_base,
+            .coverage = 0.3f,   // NOT w_coverage
+            .agreement = 0.3f,  // NOT w_agreement
+            .temporal = 0.2f,   // NOT w_temporal
+            .baseline = 0.2f,   // NOT w_baseline
         };
 
-        confidence_result_t confidence = compute_confidence(
-            availability, 2,
-            &evidence_group,
-            xTaskGetTickCount() * portTICK_PERIOD_MS / 1000.0f,
-            baseline_get_status_string(&baseline_state),
-            &conf_weights
-        );
-        float C_h = confidence.confidence;
-        float core_coverage = confidence.coverage;
-        ESP_LOGD(TAG, "Confidence: C_h=%.3f, coverage=%.3f", C_h, core_coverage);
+        confidence_result_t confidence = compute_confidence(c_cov, c_agree, c_temp, c_base, &conf_weights, 1e-9f);
+        float C_h = confidence.valid ? confidence.c_h : NAN;  // Field is c_h, NOT .confidence
+        ESP_LOGD(TAG, "Confidence: C_h=%.3f (cov=%.2f, agree=%.2f, temp=%.2f, base=%.2f)",
+                 C_h, c_cov, c_agree, c_temp, c_base);
 
-        // GATE 7: Severity (S_h) - fire hazard
-        fire_intensity_config_t fire_cfg = {
-            .temp_low_c = 40.0f,
-            .temp_high_c = 100.0f,
-            .smoke_low = 0.2f,
-            .smoke_high = 0.8f,
-        };
+        // GATE 7: Severity (S_h)
+        // Current API: severity_result_t compute_severity(float i_h, float t_h, float d_h, const severity_weights_t* weights, float epsilon)
+
+        // Compute intensity component for fire (simplified)
+        fire_intensity_config_t fire_intensity_cfg = fire_intensity_default_config();
+        float i_h_fire = 0.0f;
+        if (!isnan(temp_c)) {
+            if (temp_c >= fire_intensity_cfg.temp_high) {
+                i_h_fire = 1.0f;
+            } else if (temp_c >= fire_intensity_cfg.temp_low) {
+                i_h_fire = (temp_c - fire_intensity_cfg.temp_low) / (fire_intensity_cfg.temp_high - fire_intensity_cfg.temp_low);
+            }
+        }
+
+        // Temporal component (rate of change)
+        // PROTOTYPE LIMITATION: Requires historical measurements for rate-of-change, not yet implemented
+        // DO NOT use anomaly magnitude as fake temporal rate
+        float t_h = NAN;  // No rate-of-change tracking yet
+
+        // Duration component
+        // PROTOTYPE LIMITATION: Requires history tracking, not yet implemented
+        float d_h = NAN;  // No duration tracking yet
+
         severity_weights_t sev_weights = {
-            .w_intensity = g_config.intelligence.severity_w_intensity,
-            .w_temporal = g_config.intelligence.severity_w_temporal,
-            .w_duration = g_config.intelligence.severity_w_duration,
+            .intensity = 0.5f,  // NOT w_intensity
+            .temporal = 0.3f,   // NOT w_temporal
+            .duration = 0.2f,   // NOT w_duration
         };
 
-        // Temporal rate (simplified: use anomaly as proxy)
-        float T_h = isnan(A_temp) ? NAN : fminf(fabsf(A_temp) / 5.0f, 1.0f);
+        severity_result_t severity = compute_severity(i_h_fire, t_h, d_h, &sev_weights, 1e-9f);
+        float S_h = severity.valid ? severity.s_h : NAN;  // Field is s_h, NOT .severity
+        ESP_LOGD(TAG, "Severity: S_h=%.3f (I=%.3f, T=%.3f, D=%.3f)", S_h, i_h_fire, t_h, d_h);
 
-        // Duration (simplified: assume 0 for now, would need history)
-        float D_h = 0.0f;
-
-        severity_result_t severity = compute_severity(
-            temp_c, NAN,  // temp, smoke (no smoke sensor)
-            NAN, NAN,     // water_level, rainfall (not fire)
-            T_h, D_h,
-            &fire_cfg, NULL,  // fire config, no flood config
-            &sev_weights
-        );
-        float S_h = severity.severity;
-        ESP_LOGD(TAG, "Severity: S_h=%.3f (I=%.3f, T=%.3f, D=%.3f)",
-                 S_h, severity.intensity, T_h, D_h);
-
-        // GATE 7: Risk (R_h)
+        // GATE 8: Risk (R_h)
+        // Current API: risk_result_t compute_risk(float e_h, float s_h, float t_h, const risk_weights_t* weights, float epsilon)
         risk_weights_t risk_weights = {
-            .w_evidence = g_config.intelligence.risk_w_evidence,
-            .w_severity = g_config.intelligence.risk_w_severity,
-            .w_temporal = g_config.intelligence.risk_w_temporal,
+            .w_E = 0.4f,  // NOT w_evidence
+            .w_S = 0.4f,  // NOT w_severity
+            .w_T = 0.2f,  // NOT w_temporal
         };
 
-        risk_result_t risk = compute_risk(E_h, S_h, T_h, &risk_weights);
-        float R_h = risk.risk;
+        risk_result_t risk = compute_risk(E_h, S_h, t_h, &risk_weights, 1e-9f);
+        float R_h = risk.valid ? risk.r_h : NAN;  // Field is r_h, NOT .risk
         ESP_LOGD(TAG, "Risk: R_h=%.3f", R_h);
 
-        // GATE 8: Hazard State Machine
+        // GATE 9: Hazard State Machine
         intelligence_inputs_t intel = {
             .E_h = E_h,
             .C_h = C_h,
             .S_h = S_h,
             .R_h = R_h,
             .A_h = A_h_fire,
-            .T_h = T_h,
-            .core_coverage = core_coverage,
+            .T_h = t_h,
+            .core_coverage = c_cov,  // Use c_cov computed in confidence section
         };
 
         state_machine_config_t state_cfg = state_machine_default_config();
-        // Apply configuration overrides
-        state_cfg.watch_risk_enter = g_config.intelligence.watch_risk_enter;
-        state_cfg.suspected_evidence_enter = g_config.intelligence.suspected_evidence_enter;
-        state_cfg.confirmed_evidence_enter = g_config.intelligence.confirmed_evidence_enter;
 
         state_transition_t transition = update_state(
             hazard_current_state,
             &intel,
-            baseline_get_status_string(&baseline_state),
-            xTaskGetTickCount() * portTICK_PERIOD_MS / 1000.0f,
+            baseline_state_name(baseline_current_state),
+            esp_timer_get_time() / 1000000.0f,
             hazard_persistence_counter,
             hazard_resolved_hold_start,
             &state_cfg,

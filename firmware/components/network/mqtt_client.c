@@ -7,7 +7,7 @@
  * QoS: 1 (at least once delivery)
  */
 
-#include "mqtt_client.h"
+#include "nexalert_mqtt.h"
 #include <mqtt_client.h>
 #include "esp_event.h"
 #include "esp_log.h"
