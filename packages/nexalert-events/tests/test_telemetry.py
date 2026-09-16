@@ -20,9 +20,9 @@ def test_valid_telemetry_envelope():
         measurement_timestamp=datetime(2026, 9, 7, 7, 45, 18, tzinfo=timezone.utc),
         received_timestamp=datetime(2026, 9, 7, 7, 45, 19, tzinfo=timezone.utc),
         location=Location(lat=13.12, lon=77.58, alt=920.0),
-        measurements=Measurements(temperature_c=42.1, pm25_ug_m3=182.0),
+        measurements=Measurements(temp_c=42.1, pm25_ug_m3=182.0),
         diagnostics=Diagnostics(uptime_s=88211),
-        power=Power(battery_percent=71.0),
+        power=Power(battery_pct=71.0),
         source=TelemetrySource.SIMULATION
     )
 
@@ -35,9 +35,9 @@ def test_valid_telemetry_envelope():
 
 def test_missing_not_zero_measurements():
     """Test that None in measurements is preserved (missing != zero)."""
-    measurements = Measurements(temperature_c=25.0, humidity_pct=None)
+    measurements = Measurements(temp_c=25.0, humidity_pct=None)
 
-    assert measurements.temperature_c == 25.0
+    assert measurements.temp_c == 25.0
     assert measurements.humidity_pct is None  # None preserved, not coerced to 0
 
 

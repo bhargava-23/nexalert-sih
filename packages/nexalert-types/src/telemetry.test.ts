@@ -46,7 +46,7 @@ describe('Schema Synchronization', () => {
         alt: 920.0
       },
       measurements: {
-        temperature_c: 25.5,
+        temp_c: 25.5,
         pm25_ugm3: 45.0
       },
       diagnostics: {
@@ -54,7 +54,7 @@ describe('Schema Synchronization', () => {
         comm_integrity: 0.95
       },
       power: {
-        battery_percent: 85.0
+        battery_pct: 85.0
       },
       source: TelemetrySource.HARDWARE,
       auth: {}

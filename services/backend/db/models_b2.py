@@ -17,6 +17,9 @@ from db.models import Base
 class Incident(Base):
     """Regional incident entity
 
+    Phase 2C-3C: Pure correlation container with no single-hazard semantics.
+    Per-hazard information is in IncidentHazardAssessment relationships.
+
     Specification: Document 10, Section 2
     Tracks correlated hazard observations across multiple nodes.
     """
@@ -28,16 +31,12 @@ class Incident(Base):
         default=uuid.uuid4,
         comment="Stable operational incident identity"
     )
-    hazard_type = Column(String(32), nullable=False)  # FIRE, FLOOD, etc.
     state = Column(
         String(32),
         nullable=False,
         comment="NEW, ACTIVE, ESCALATED, RESOLVED"
     )
     information_condition = Column(String(32), comment="GOOD, DEGRADED, UNKNOWN")
-    severity_index = Column(Double, comment="Regional severity [0,1]")
-    risk_index = Column(Double, comment="Regional risk [0,1]")
-    confidence_index = Column(Double, comment="Regional confidence [0,1]")
 
     # Geometry
     geometry = Column(
@@ -74,11 +73,12 @@ class Incident(Base):
     # Relationships
     observations = relationship("IncidentObservation", back_populates="incident")
     regional_assessments = relationship("RegionalHazardAssessment", back_populates="incident")
+    hazard_assessments = relationship("IncidentHazardAssessment", back_populates="incident")
 
     __table_args__ = (
-        Index("idx_incidents_hazard_state", "hazard_type", "state"),
         Index("idx_incidents_last_observed", "last_observed_at"),
         Index("idx_incidents_created", "created_at"),
+        Index("idx_incidents_state", "state"),
     )
 
 
@@ -178,6 +178,98 @@ class RegionalHazardAssessment(Base):
     __table_args__ = (
         Index("idx_regional_assess_incident", "incident_id"),
         Index("idx_regional_assess_hazard_ts", "hazard_type", "created_at"),
+    )
+
+
+class IncidentHazardAssessment(Base):
+    """Regional/Incident-level hazard assessment (Phase 2C canonical model)
+
+    Multi-hazard domain model: One Incident MAY contain multiple independent
+    HazardAssessment entities. Each assessment independently owns evidence,
+    confidence, severity, operational_risk, and state for ONE hazard type.
+
+    CRITICAL DISTINCTION: This is incident-level/regional aggregation, NOT
+    the edge-level models.HazardAssessment (per-telemetry intelligence).
+    Both concepts coexist in separate architectural layers.
+    """
+    __tablename__ = "incident_hazard_assessments"
+
+    assessment_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    incident_id = Column(
+        PGUUID(as_uuid=True),
+        ForeignKey("incidents.incident_id"),
+        nullable=False,
+        comment="Incident this assessment belongs to"
+    )
+    hazard_type = Column(
+        String(32),
+        nullable=False,
+        comment="FIRE, FLOOD, STRUCTURAL, GAS, etc."
+    )
+
+    # Core assessment (relational, queryable, indexed)
+    evidence = Column(
+        Double,
+        comment="Hazard-specific evidence index [0,1] - NULL = missing (NOT zero)"
+    )
+    confidence = Column(
+        Double,
+        comment="Trust in assessment [0,1] - NOT probability"
+    )
+    severity = Column(
+        Double,
+        comment="Hazard intensity/consequence [0,1]"
+    )
+    operational_risk = Column(
+        Double,
+        comment="Operational prioritization index [0,1] - NOT probability"
+    )
+    state = Column(
+        String(32),
+        comment="NORMAL, WATCH, SUSPECTED, CONFIRMED, CRITICAL, RESOLVED"
+    )
+    information_condition = Column(
+        String(32),
+        comment="GOOD, DEGRADED, UNKNOWN"
+    )
+
+    # Hazard-specific data (JSONB, flexible)
+    hazard_specific_data = Column(
+        JSONB,
+        comment="Hazard-specific attributes (fire geometry, flood depth, etc.)"
+    )
+
+    # Provenance
+    assessment_timestamp = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        comment="When assessment was computed"
+    )
+    model_version = Column(
+        String(64),
+        comment="Algorithm/model version (e.g. 'state_machine_v1.2')"
+    )
+    source_summary = Column(
+        JSONB,
+        comment="Contributing nodes/observations (provenance)"
+    )
+
+    created_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+        comment="Database insertion timestamp"
+    )
+
+    # Relationships
+    incident = relationship("Incident", back_populates="hazard_assessments")
+
+    __table_args__ = (
+        Index("idx_incident_hazard_assess_incident", "incident_id"),
+        Index("idx_incident_hazard_assess_type", "hazard_type"),
+        Index("idx_incident_hazard_assess_state", "state"),
+        Index("idx_incident_hazard_assess_incident_type", "incident_id", "hazard_type"),
+        Index("idx_incident_hazard_assess_severity", "severity"),
     )
 
 

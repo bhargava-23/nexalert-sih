@@ -29,12 +29,12 @@ class Power(BaseModel):
     """Power/battery state. All optional - missing != zero."""
     battery_voltage: Optional[float] = None
     solar_current: Optional[float] = None
-    battery_percent: Optional[float] = Field(None, ge=0, le=100)
+    battery_pct: Optional[float] = Field(None, ge=0, le=100)  # matches schema: battery_pct, NOT battery_percent
 
 
 class Measurements(BaseModel):
     """Sensor readings. All Optional to preserve missing != zero."""
-    temperature_c: Optional[float] = None
+    temp_c: Optional[float] = None  # matches schema: temp_c, NOT temperature_c
     humidity_pct: Optional[float] = None
     pressure_hpa: Optional[float] = None
     pm25_ug_m3: Optional[float] = None

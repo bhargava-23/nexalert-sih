@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'NexAlert Citizen Web',
-  description: 'Citizen PWA for NexAlert environmental monitoring system',
+  title: 'NexAlert Citizen Emergency',
+  description: 'Citizen emergency alert system for NexAlert environmental monitoring',
 }
 
 export default function RootLayout({

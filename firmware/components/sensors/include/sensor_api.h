@@ -21,9 +21,12 @@ extern "C" {
  * Sensor types supported by NexAlert nodes
  */
 typedef enum {
-    SENSOR_TYPE_DHT22 = 0,      // Temperature + Humidity
+    SENSOR_TYPE_DHT22 = 0,      // Temperature + Humidity (legacy)
     SENSOR_TYPE_BMP280,          // Pressure
     SENSOR_TYPE_PMS5003,         // PM2.5 / PM10
+    SENSOR_TYPE_BME680,          // Track 3A: Temperature + Humidity + Pressure + Gas
+    SENSOR_TYPE_MPU6050,         // Track 3A: Accelerometer (vibration)
+    SENSOR_TYPE_MQ2,             // Track 3A: Gas sensor (raw ADC)
     SENSOR_TYPE_MAX
 } sensor_type_t;
 

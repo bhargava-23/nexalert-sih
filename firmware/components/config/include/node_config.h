@@ -38,6 +38,14 @@ typedef struct {
 } sampling_config_t;
 
 /**
+ * WiFi configuration - Track 3A
+ */
+typedef struct {
+    char ssid[64];               // WiFi SSID (Track 3A: "NexAlert_Field_Net")
+    char password[64];           // WiFi password
+} wifi_config_t;
+
+/**
  * MQTT broker configuration
  */
 typedef struct {
@@ -141,6 +149,7 @@ typedef struct {
 typedef struct {
     node_identity_t identity;
     sampling_config_t sampling;
+    wifi_config_t wifi;              // Track 3A: WiFi configuration
     mqtt_config_t mqtt;
     buffer_config_t buffer;
     heartbeat_config_t heartbeat;

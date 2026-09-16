@@ -31,12 +31,12 @@ class NodeResponse(BaseModel):
 
 
 class TelemetryResponse(BaseModel):
-    """Telemetry record response"""
+    """Telemetry record response with canonical field names"""
     telemetry_id: str
     node_id: str
     sequence: int
-    measurement_ts: datetime
-    receive_ts: datetime
+    measurement_timestamp: datetime  # Canonical: when observation captured (edge time)
+    received_timestamp: datetime      # Canonical: when backend received (server time)
     source: str
     location: Optional[dict] = None
     measurements: dict
@@ -322,20 +322,24 @@ def _geography_to_dict(geography) -> Optional[dict]:
 
 
 def _telemetry_to_response(record: TelemetryRecord) -> TelemetryResponse:
-    """Convert TelemetryRecord to response model
+    """Convert TelemetryRecord to response model with canonical field mapping
+
+    Maps database column names to canonical API field names:
+    - measurement_ts (DB) -> measurement_timestamp (API)
+    - receive_ts (DB) -> received_timestamp (API)
 
     Args:
         record: TelemetryRecord database model
 
     Returns:
-        TelemetryResponse pydantic model
+        TelemetryResponse pydantic model with canonical field names
     """
     return TelemetryResponse(
         telemetry_id=record.telemetry_id,
         node_id=record.node_id,
         sequence=record.sequence,
-        measurement_ts=record.measurement_ts,
-        receive_ts=record.receive_ts,
+        measurement_timestamp=record.measurement_ts,  # Semantic mapping: DB -> canonical API
+        received_timestamp=record.receive_ts,          # Semantic mapping: DB -> canonical API
         source=record.source,
         location=_geography_to_dict(record.location),
         measurements=record.measurements_jsonb or {},

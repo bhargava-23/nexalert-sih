@@ -26,14 +26,19 @@
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
+#include "esp_adc/adc_oneshot.h"  // Track 3A: ADC for MQ-2
 
-// Sensor drivers
-#include "dht22.h"
+// Sensor drivers - Track 3A: BME680, MPU6050, MQ-2
+#include "i2c_bus.h"
+#include "bme680.h"
+#include "mpu6050.h"
+#include "mq2.h"
 
 // Telemetry and network
-#include "telemetry_envelope.h"
+#include "hardware_json.h"      // Track 3A: Hardware JSON for ESP32 → MQTT transport
 #include "wifi_station.h"
 #include "nexalert_mqtt.h"
+#include "sntp_client.h"        // Track 3A: SNTP/NTP for time synchronization
 
 // Configuration and resilience
 #include "node_config.h"
@@ -216,29 +221,65 @@ static void sampling_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Sampling task started");
 
+    // Track 3A: Initialize I2C bus (shared by BME680 and MPU6050)
+    esp_err_t ret = i2c_bus_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "I2C bus init failed: %d", ret);
+        vTaskDelete(NULL);
+        return;
+    }
+
     // Load calibration from NVS
-    calibration_t temp_cal, humid_cal;
-    esp_err_t ret;
-    ret = calibration_load(SENSOR_TYPE_DHT22, "temp", &temp_cal);
+    calibration_t temp_cal, humid_cal, pressure_cal;
+    ret = calibration_load(SENSOR_TYPE_BME680, "temp", &temp_cal);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Temperature calibration not found, using default");
         temp_cal.valid = false;
     }
-    ret = calibration_load(SENSOR_TYPE_DHT22, "humid", &humid_cal);
+    ret = calibration_load(SENSOR_TYPE_BME680, "humid", &humid_cal);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Humidity calibration not found, using default");
         humid_cal.valid = false;
     }
+    ret = calibration_load(SENSOR_TYPE_BME680, "pressure", &pressure_cal);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Pressure calibration not found, using default");
+        pressure_cal.valid = false;
+    }
 
-    // Initialize DHT22 with calibration
-    dht22_config_t dht_cfg = {
-        .gpio_pin = 4,  // GPIO4 for DHT22
+    // Track 3A: Initialize BME680 with calibration (replaces DHT22)
+    bme680_config_t bme_cfg = {
+        .i2c_addr = BME680_I2C_ADDR_PRIMARY,  // Try 0x77, auto-fallback to 0x76
         .temp_cal = temp_cal,
         .humid_cal = humid_cal,
+        .pressure_cal = pressure_cal,
     };
-    ret = dht22_init(&dht_cfg);
+    ret = bme680_init(&bme_cfg);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "DHT22 init failed: %d", ret);
+        ESP_LOGE(TAG, "BME680 init failed: %d", ret);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // Track 3A: Initialize MPU6050 accelerometer for vibration detection
+    mpu6050_config_t mpu_cfg = {
+        .i2c_addr = MPU6050_I2C_ADDR,  // 0x68
+    };
+    ret = mpu6050_init(&mpu_cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "MPU6050 init failed: %d", ret);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // Track 3A: Initialize MQ-2 gas sensor (raw ADC)
+    mq2_config_t mq2_cfg = {
+        .gpio_pin = 4,           // GPIO4 for MQ-2 (was DHT22 pin)
+        .adc_channel = ADC1_CHANNEL_3,  // GPIO4 = ADC1_CH3 on ESP32-S3
+    };
+    ret = mq2_init(&mq2_cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "MQ-2 init failed: %d", ret);
         vTaskDelete(NULL);
         return;
     }
@@ -250,28 +291,70 @@ static void sampling_task(void *pvParameters)
         g_sample_count++;
         ESP_LOGI(TAG, "=== Sample %lu ===", g_sample_count);
 
-        // ========== SENSOR ACQUISITION ==========
-        sensor_reading_t temp_reading, humid_reading;
+        // ========== SENSOR ACQUISITION - TRACK 3A ==========
+        // BME680: Temperature, Humidity, Pressure, Gas Resistance
+        sensor_reading_t temp_reading, humid_reading, pressure_reading, gas_reading;
 
-        ret = dht22_read_temperature(&temp_reading);
+        ret = bme680_read_temperature(&temp_reading);
         if (ret == ESP_OK && temp_reading.valid) {
-            ESP_LOGI(TAG, "Temperature: %.2f °C (calibrated)", temp_reading.value);
+            ESP_LOGI(TAG, "Temperature: %.2f °C (BME680, calibrated)", temp_reading.value);
         } else {
-            ESP_LOGW(TAG, "Temperature: MISSING (sensor error)");
+            ESP_LOGW(TAG, "Temperature: MISSING (BME680 sensor error)");
             g_failed_samples++;
         }
 
-        ret = dht22_read_humidity(&humid_reading);
+        ret = bme680_read_humidity(&humid_reading);
         if (ret == ESP_OK && humid_reading.valid) {
-            ESP_LOGI(TAG, "Humidity: %.2f %% (calibrated)", humid_reading.value);
+            ESP_LOGI(TAG, "Humidity: %.2f %% (BME680, calibrated)", humid_reading.value);
         } else {
-            ESP_LOGW(TAG, "Humidity: MISSING (sensor error)");
+            ESP_LOGW(TAG, "Humidity: MISSING (BME680 sensor error)");
             g_failed_samples++;
+        }
+
+        ret = bme680_read_pressure(&pressure_reading);
+        if (ret == ESP_OK && pressure_reading.valid) {
+            ESP_LOGI(TAG, "Pressure: %.2f hPa (BME680, calibrated)", pressure_reading.value);
+        } else {
+            ESP_LOGW(TAG, "Pressure: MISSING (BME680 sensor error)");
+            g_failed_samples++;
+        }
+
+        ret = bme680_read_gas(&gas_reading);
+        if (ret == ESP_OK && gas_reading.valid) {
+            ESP_LOGI(TAG, "Gas Resistance: %.0f ADC (BME680, raw)", gas_reading.value);
+        } else {
+            ESP_LOGW(TAG, "Gas Resistance: MISSING (BME680 sensor error)");
+        }
+
+        // MPU6050: 3-axis accelerometer for vibration detection
+        mpu6050_accel_t accel_reading;
+        ret = mpu6050_read_accel(&accel_reading);
+        if (ret == ESP_OK && accel_reading.valid) {
+            ESP_LOGI(TAG, "Acceleration: x=%.3f y=%.3f z=%.3f m/s² (MPU6050)",
+                     accel_reading.x, accel_reading.y, accel_reading.z);
+        } else {
+            ESP_LOGW(TAG, "Acceleration: MISSING (MPU6050 sensor error)");
+            g_failed_samples++;
+        }
+
+        // MQ-2: Gas sensor (RAW ADC, NOT calibrated ppm)
+        sensor_reading_t mq2_reading;
+        ret = mq2_read_gas(&mq2_reading);
+        if (ret == ESP_OK && mq2_reading.valid) {
+            ESP_LOGI(TAG, "MQ-2 Gas: %.0f ADC (raw, NOT ppm)", mq2_reading.value);
+        } else {
+            ESP_LOGW(TAG, "MQ-2 Gas: MISSING (sensor error)");
         }
 
         // Raw measurements (NAN = missing)
         float temp_c = temp_reading.valid ? temp_reading.value : NAN;
         float humidity_pct = humid_reading.valid ? humid_reading.value : NAN;
+        float pressure_hpa = pressure_reading.valid ? pressure_reading.value : NAN;
+        float gas_resistance_adc = gas_reading.valid ? gas_reading.value : NAN;
+        float vibration_mps2 = accel_reading.valid ? sqrtf(accel_reading.x * accel_reading.x +
+                                                           accel_reading.y * accel_reading.y +
+                                                           accel_reading.z * accel_reading.z) : NAN;
+        float mq2_gas_adc = mq2_reading.valid ? mq2_reading.value : NAN;
 
         // ========== INTELLIGENCE PIPELINE ==========
 
@@ -554,39 +637,45 @@ static void sampling_task(void *pvParameters)
                      information_condition_name(transition.info_condition));
         }
 
-        // ========== TELEMETRY ENVELOPE ==========
-        measurements_t measurements = {
-            .temp_c = temp_c,
-            .humidity_pct = humidity_pct,
-            .pressure_hpa = NAN,
-            .pm25_ug_m3 = NAN,
-            .pm10_ug_m3 = NAN,
+        // ========== HARDWARE JSON GENERATION (Track 3A) ==========
+        // Map Track 3A sensors to hardware JSON structure
+        hardware_sensor_readings_t hw_sensors = {
+            // BME680 → temperature_c, humidity_rh, pressure_hpa
+            .temperature_c = temp_c,         // From BME680
+            .humidity_rh = humidity_pct,     // From BME680
+            .pressure_hpa = pressure_hpa,    // From BME680
+
+            // MQ-2 → gas_ppm (RAW ADC, NOT calibrated ppm)
+            .gas_ppm = mq2_gas_adc,          // From MQ-2 (raw ADC 0-4095)
+
+            // MPU6050 → vibration_mps2
+            .vibration_mps2 = vibration_mps2, // From MPU6050
+
+            // PM sensors (not yet connected - MUST be null)
+            .pm25_ugm3 = NAN,                // PM2.5 sensor not connected
+            .pm10_ugm3 = NAN,                // PM10 sensor not connected
+
+            // Environmental sensors (not connected - MUST be null)
+            .water_level_m = NAN,
+            .rainfall_mm_h = NAN,
+            .soil_moisture_vwc_pct = NAN,
         };
 
-        diagnostics_t diagnostics = {
-            .uptime_s = esp_timer_get_time() / 1000000,
-            .self_test_passed = true,
-            .comm_integrity = mqtt_is_connected() ? 1.0f : 0.5f,
-            .calibration_valid = temp_cal.valid && humid_cal.valid,
-            .stability_index = 0.9f,
+        hardware_power_t hw_power = {
+            .battery_pct = NAN,              // Power monitoring not yet implemented
+            .solar_state = "INACTIVE",       // Solar state placeholder
         };
 
-        power_t power = {
-            .battery_pct = NAN,
-            .battery_voltage = NAN,
-            .solar_current = NAN,
-        };
-
-        char* telemetry_json = NULL;
-        ret = telemetry_envelope_generate(&measurements, &diagnostics, &power, &telemetry_json);
-        if (ret != ESP_OK || telemetry_json == NULL) {
-            ESP_LOGE(TAG, "Telemetry generation failed");
+        char* hardware_json = NULL;
+        ret = hardware_json_generate(&hw_sensors, &hw_power, &hardware_json);
+        if (ret != ESP_OK || hardware_json == NULL) {
+            ESP_LOGE(TAG, "Hardware JSON generation failed");
             vTaskDelay(pdMS_TO_TICKS(g_config.sampling.interval_ms));
             continue;
         }
 
-        uint32_t seq = telemetry_envelope_get_sequence();
-        ESP_LOGI(TAG, "Telemetry generated: seq=%lu, size=%d bytes", seq, strlen(telemetry_json));
+        uint32_t seq = hardware_json_get_sequence();
+        ESP_LOGI(TAG, "Hardware JSON generated: seq=%lu, size=%d bytes", seq, strlen(hardware_json));
 
         // ========== PUBLISH WITH BUFFERING ==========
         // Determine priority based on hazard state
@@ -597,14 +686,14 @@ static void sampling_task(void *pvParameters)
             priority = PRIORITY_HAZARD;
         }
 
-        ret = publish_with_buffering(telemetry_json, seq, priority);
+        ret = publish_with_buffering(hardware_json, seq, priority);
         if (ret == ESP_OK) {
-            ESP_LOGI(TAG, "Telemetry published (priority=%d)", priority);
+            ESP_LOGI(TAG, "Hardware JSON published (priority=%d)", priority);
         } else {
-            ESP_LOGW(TAG, "Telemetry buffered (priority=%d)", priority);
+            ESP_LOGW(TAG, "Hardware JSON buffered (priority=%d)", priority);
         }
 
-        free(telemetry_json);
+        free(hardware_json);
 
         // ========== RECONNECT REPLAY ==========
         // If MQTT just reconnected, replay buffered messages
@@ -651,14 +740,8 @@ void app_main(void)
     // NVS/Calibration
     ESP_ERROR_CHECK(calibration_store_init());
 
-    // Telemetry envelope
-    telemetry_config_t telem_cfg = {
-        .node_id = g_config.identity.node_id,
-        .latitude = g_config.identity.latitude,
-        .longitude = g_config.identity.longitude,
-        .altitude = g_config.identity.altitude,
-    };
-    ESP_ERROR_CHECK(telemetry_envelope_init(&telem_cfg));
+    // Hardware JSON (Track 3A: ESP32 → MQTT transport)
+    ESP_ERROR_CHECK(hardware_json_init(g_config.identity.node_id));
 
     // Telemetry buffer
     buffer_config_t buf_cfg = {
@@ -673,10 +756,10 @@ void app_main(void)
     };
     ESP_ERROR_CHECK(node_heartbeat_init(&hb_cfg));
 
-    // Wi-Fi
+    // Wi-Fi (Track 3A: NexAlert_Field_Net)
     nexalert_wifi_config_t wifi_cfg = {
-        .ssid = "YOUR_WIFI_SSID",  // TODO: Load from config
-        .password = "YOUR_WIFI_PASSWORD",
+        .ssid = g_config.wifi.ssid,        // Track 3A: "NexAlert_Field_Net"
+        .password = g_config.wifi.password,
     };
     ESP_ERROR_CHECK(wifi_station_init(&wifi_cfg));
 
@@ -688,6 +771,21 @@ void app_main(void)
     char ip[16];
     wifi_get_ip(ip, sizeof(ip));
     ESP_LOGI(TAG, "Wi-Fi connected: %s", ip);
+
+    // SNTP (Track 3A: Time synchronization from 10.42.0.1)
+    sntp_config_t sntp_cfg = {
+        .ntp_server = "10.42.0.1",  // Track 3A: Locked NTP server (Raspberry Pi)
+        .sync_timeout_ms = 10000,
+    };
+    ESP_ERROR_CHECK(sntp_client_init(&sntp_cfg));
+
+    ESP_LOGI(TAG, "Waiting for SNTP sync (timeout 10s)...");
+    esp_err_t sntp_ret = sntp_wait_for_sync(10000);
+    if (sntp_ret == ESP_OK) {
+        ESP_LOGI(TAG, "SNTP synchronized with 10.42.0.1");
+    } else {
+        ESP_LOGW(TAG, "SNTP sync timeout, using uptime-based timestamps");
+    }
 
     // MQTT with LOCKED TOPIC FORMAT
     mqtt_init_params_t mqtt_params = {

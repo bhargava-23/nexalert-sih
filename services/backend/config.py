@@ -31,8 +31,8 @@ class Settings(BaseSettings):
         description="MQTT broker port"
     )
     mqtt_topic: str = Field(
-        default="Nexalert/telemetry/node1",
-        description="MQTT telemetry topic (locked development format)"
+        default="Nexalert/telemetry/+",
+        description="MQTT telemetry wildcard subscription (Nexalert/telemetry/<node_id>)"
     )
     mqtt_client_id: str = Field(
         default="nexalert-backend",

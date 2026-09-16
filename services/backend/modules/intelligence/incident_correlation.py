@@ -41,25 +41,29 @@ class IncidentState(str, Enum):
 
 @dataclass
 class IncidentCandidate:
-    """Candidate incident for correlation"""
+    """Candidate incident for correlation
+
+    Phase 2C-3A: Removed severity_index and risk_index fields.
+    Use incident.hazard_assessments for hazard-specific metrics.
+    """
     incident_id: uuid.UUID
     hazard_type: str
     state: str
     centroid_lat: Optional[float]
     centroid_lon: Optional[float]
     last_observed_at: datetime
-    severity_index: Optional[float]
-    risk_index: Optional[float]
 
 
 @dataclass
 class IncidentCreationResult:
-    """Result of incident creation or correlation"""
+    """Result of incident creation or correlation
+
+    Phase 2C-3A: Removed severity_index and risk_index fields.
+    Use incident.hazard_assessments for hazard-specific metrics.
+    """
     incident_id: uuid.UUID
     action: str  # "created", "updated", "merged"
     state: str
-    severity_index: Optional[float]
-    risk_index: Optional[float]
     centroid_lat: Optional[float]
     centroid_lon: Optional[float]
     contributing_nodes: List[str]

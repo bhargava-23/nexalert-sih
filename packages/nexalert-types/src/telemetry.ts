@@ -21,11 +21,11 @@ export interface Location {
 export interface Power {
   battery_voltage?: number;
   solar_current?: number;
-  battery_percent?: number;  // 0-100
+  battery_pct?: number;  // 0-100 (matches schema: battery_pct, NOT battery_percent)
 }
 
 export interface Measurements {
-  temperature_c?: number;
+  temp_c?: number;        // matches schema: temp_c, NOT temperature_c
   humidity_pct?: number;
   pressure_hpa?: number;
   pm25_ug_m3?: number;

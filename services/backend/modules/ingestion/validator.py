@@ -5,6 +5,7 @@ Preserves MISSING != ZERO semantics throughout.
 """
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -12,6 +13,9 @@ from jsonschema import validate, ValidationError, Draft7Validator
 from ulid import ULID
 
 logger = logging.getLogger(__name__)
+
+# Canonical node identity pattern: NODE-[0-9]{3,}
+NODE_ID_PATTERN = re.compile(r'^NODE-[0-9]{3,}$')
 
 
 class TelemetryValidator:
@@ -84,10 +88,10 @@ class TelemetryValidator:
         except Exception:
             return f"Invalid telemetry_id format: {telemetry_id} (expected ULID)"
 
-        # Validate node_id format
+        # Validate node_id format (canonical pattern: NODE-[0-9]{3,})
         node_id = payload.get("node_id", "")
-        if not node_id.startswith("NODE-"):
-            return f"Invalid node_id format: {node_id} (expected NODE-XXX)"
+        if not NODE_ID_PATTERN.match(node_id):
+            return f"Invalid node_id format: {node_id} (expected NODE-[0-9]{{3,}}, e.g., NODE-001)"
 
         # Validate timestamps
         try:

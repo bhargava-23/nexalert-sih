@@ -44,9 +44,9 @@ def test_valid_envelope_validates_against_schema(authoritative_schema):
         measurement_timestamp=datetime(2026, 9, 8, 10, 0, 0, tzinfo=timezone.utc),
         received_timestamp=datetime(2026, 9, 8, 10, 0, 1, tzinfo=timezone.utc),
         location=Location(lat=13.12, lon=77.58, alt=920.0),
-        measurements=Measurements(temperature_c=25.5, pm25_ug_m3=45.0),
+        measurements=Measurements(temp_c=25.5, pm25_ug_m3=45.0),
         diagnostics=Diagnostics(uptime_s=1234, comm_integrity=0.95),
-        power=Power(battery_percent=85.0),
+        power=Power(battery_pct=85.0),
         source=TelemetrySource.HARDWARE
     )
 
@@ -66,7 +66,7 @@ def test_missing_fields_validate_as_null(authoritative_schema):
         measurement_timestamp=datetime(2026, 9, 8, 10, 0, 0, tzinfo=timezone.utc),
         received_timestamp=datetime(2026, 9, 8, 10, 0, 1, tzinfo=timezone.utc),
         location=Location(lat=0, lon=0, alt=None),  # alt is None
-        measurements=Measurements(temperature_c=None, humidity_pct=None),  # Missing measurements
+        measurements=Measurements(temp_c=None, humidity_pct=None),  # Missing measurements
         diagnostics=Diagnostics(),  # All diagnostics missing
         power=Power(),  # All power fields missing
         source=TelemetrySource.SIMULATION

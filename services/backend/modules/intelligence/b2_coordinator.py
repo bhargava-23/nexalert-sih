@@ -23,6 +23,7 @@ from db.models_b2 import (
     Incident,
     IncidentObservation,
     RegionalHazardAssessment,
+    IncidentHazardAssessment,
     NodeStatus
 )
 from modules.intelligence.regional_fusion import (
@@ -61,6 +62,23 @@ class B2Coordinator:
             "incidents_updated": 0,
             "errors": 0
         }
+
+    def _map_incident_state_to_hazard_state(self, incident_state: str) -> str:
+        """Map incident lifecycle state to hazard assessment state
+
+        Args:
+            incident_state: Incident state (NEW, ACTIVE, ESCALATED, RESOLVED)
+
+        Returns:
+            Hazard state (NORMAL, WATCH, SUSPECTED, CONFIRMED, CRITICAL, RESOLVED)
+        """
+        mapping = {
+            "NEW": "SUSPECTED",
+            "ACTIVE": "CONFIRMED",
+            "ESCALATED": "CRITICAL",
+            "RESOLVED": "RESOLVED"
+        }
+        return mapping.get(incident_state, "NORMAL")
 
     async def trigger_after_persistence(
         self,
@@ -303,29 +321,33 @@ class B2Coordinator:
             List of IncidentCandidate objects
         """
         try:
-            # Query incidents that are not RESOLVED
-            stmt = select(Incident).where(
-                and_(
-                    Incident.hazard_type == hazard_type,
-                    Incident.state != IncidentState.RESOLVED
+            # Phase 2C-3C: Query via IncidentHazardAssessment JOIN (Incident has no hazard_type)
+            stmt = (
+                select(Incident)
+                .join(IncidentHazardAssessment)
+                .where(
+                    and_(
+                        IncidentHazardAssessment.hazard_type == hazard_type,
+                        Incident.state != IncidentState.RESOLVED
+                    )
                 )
-            ).order_by(Incident.last_observed_at.desc())
+                .distinct()
+                .order_by(Incident.last_observed_at.desc())
+            )
 
             result = await session.execute(stmt)
             incidents = result.scalars().all()
 
-            # Convert to IncidentCandidate
+            # Convert to IncidentCandidate (Phase 2C-3C: no longer using legacy scalar fields)
             candidates = []
             for inc in incidents:
                 candidates.append(IncidentCandidate(
                     incident_id=inc.incident_id,
-                    hazard_type=inc.hazard_type,
+                    hazard_type=hazard_type,  # Pass as parameter, not from inc
                     state=inc.state,
                     centroid_lat=inc.centroid_lat,
                     centroid_lon=inc.centroid_lon,
-                    last_observed_at=inc.last_observed_at,
-                    severity_index=inc.severity_index,
-                    risk_index=inc.risk_index
+                    last_observed_at=inc.last_observed_at
                 ))
 
             return candidates
@@ -357,14 +379,12 @@ class B2Coordinator:
             node_observations=observations
         )
 
-        # Create incident
+        # Create incident (correlation container only)
+        # Phase 2C-3C: Incident is a pure correlation container
+        # No single-hazard semantics; per-hazard data in IncidentHazardAssessment
         incident = Incident(
             incident_id=generate_deterministic_incident_id(),
-            hazard_type=hazard_type,
             state=incident_state,
-            severity_index=fusion_result.regional_severity,
-            risk_index=fusion_result.regional_risk,
-            confidence_index=fusion_result.regional_confidence,
             centroid_lat=fusion_result.centroid_lat,
             centroid_lon=fusion_result.centroid_lon,
             first_observed_at=current_time,
@@ -379,9 +399,32 @@ class B2Coordinator:
 
         session.add(incident)
 
-        # Create regional hazard assessment
-        assessment = RegionalHazardAssessment(
+        # Create incident-level hazard assessment (Phase 2C-2: canonical model)
+        hazard_assessment = IncidentHazardAssessment(
             incident_id=incident.incident_id,
+            hazard_type=hazard_type,
+            evidence=fusion_result.regional_evidence,
+            confidence=fusion_result.regional_confidence,
+            severity=fusion_result.regional_severity,
+            operational_risk=fusion_result.regional_risk,
+            state=self._map_incident_state_to_hazard_state(incident_state),
+            information_condition=fusion_result.information_condition if hasattr(fusion_result, 'information_condition') else None,
+            assessment_timestamp=current_time,
+            model_version="b2_fusion_v1",
+            source_summary={
+                "node_count": fusion_result.node_count,
+                "contributing_nodes": fusion_result.contributing_nodes,
+                "agreement_index": fusion_result.agreement_index,
+                "spatial_extent_m": fusion_result.spatial_extent_m
+            }
+        )
+
+        session.add(hazard_assessment)
+
+        # Create regional hazard assessment (Track B2 existing structure)
+        regional_assessment = RegionalHazardAssessment(
+            incident_id=incident.incident_id,
+            hazard_type=hazard_type,
             regional_evidence=fusion_result.regional_evidence,
             regional_confidence=fusion_result.regional_confidence,
             regional_severity=fusion_result.regional_severity,
@@ -390,10 +433,10 @@ class B2Coordinator:
             node_count=fusion_result.node_count,
             agreement_index=fusion_result.agreement_index,
             spatial_extent_m=fusion_result.spatial_extent_m,
-            last_updated=current_time
+            information_condition=fusion_result.information_condition if hasattr(fusion_result, 'information_condition') else None
         )
 
-        session.add(assessment)
+        session.add(regional_assessment)
 
         # Create incident observations
         for obs in observations:
@@ -457,30 +500,80 @@ class B2Coordinator:
 
         if inc:
             inc.state = new_state
-            inc.severity_index = fusion_result.regional_severity
-            inc.risk_index = fusion_result.regional_risk
-            inc.confidence_index = fusion_result.regional_confidence
+            # Phase 2C-3C: Incident is a pure correlation container
+            # No single-hazard semantics; per-hazard data in IncidentHazardAssessment
             inc.centroid_lat = fusion_result.centroid_lat
             inc.centroid_lon = fusion_result.centroid_lon
             inc.last_observed_at = current_time
             inc.current_version += 1
 
-            # Update regional assessment
+            # Update incident-level hazard assessment (Phase 2C-3C: canonical model)
+            # Query by hazard_type from fusion_result for multi-hazard support
+            stmt_hazard = select(IncidentHazardAssessment).where(
+                and_(
+                    IncidentHazardAssessment.incident_id == incident.incident_id,
+                    IncidentHazardAssessment.hazard_type == fusion_result.hazard_type
+                )
+            )
+            result_hazard = await session.execute(stmt_hazard)
+            hazard_assessment = result_hazard.scalar_one_or_none()
+
+            if hazard_assessment:
+                # Update existing hazard assessment
+                hazard_assessment.evidence = fusion_result.regional_evidence
+                hazard_assessment.confidence = fusion_result.regional_confidence
+                hazard_assessment.severity = fusion_result.regional_severity
+                hazard_assessment.operational_risk = fusion_result.regional_risk
+                hazard_assessment.state = self._map_incident_state_to_hazard_state(new_state)
+                hazard_assessment.assessment_timestamp = current_time
+                if hasattr(fusion_result, 'information_condition'):
+                    hazard_assessment.information_condition = fusion_result.information_condition
+                hazard_assessment.source_summary = {
+                    "node_count": fusion_result.node_count,
+                    "contributing_nodes": fusion_result.contributing_nodes,
+                    "agreement_index": fusion_result.agreement_index,
+                    "spatial_extent_m": fusion_result.spatial_extent_m
+                }
+            else:
+                # Create hazard assessment if missing (should not happen, but defensive)
+                # Phase 2C-3A FIX: Use fusion_result.hazard_type, not inc.hazard_type
+                hazard_assessment = IncidentHazardAssessment(
+                    incident_id=incident.incident_id,
+                    hazard_type=fusion_result.hazard_type,
+                    evidence=fusion_result.regional_evidence,
+                    confidence=fusion_result.regional_confidence,
+                    severity=fusion_result.regional_severity,
+                    operational_risk=fusion_result.regional_risk,
+                    state=self._map_incident_state_to_hazard_state(new_state),
+                    information_condition=fusion_result.information_condition if hasattr(fusion_result, 'information_condition') else None,
+                    assessment_timestamp=current_time,
+                    model_version="b2_fusion_v1",
+                    source_summary={
+                        "node_count": fusion_result.node_count,
+                        "contributing_nodes": fusion_result.contributing_nodes,
+                        "agreement_index": fusion_result.agreement_index,
+                        "spatial_extent_m": fusion_result.spatial_extent_m
+                    }
+                )
+                session.add(hazard_assessment)
+
+            # Update regional assessment (Track B2 existing structure)
             stmt = select(RegionalHazardAssessment).where(
                 RegionalHazardAssessment.incident_id == incident.incident_id
             )
             result = await session.execute(stmt)
-            assessment = result.scalar_one_or_none()
+            regional_assessment = result.scalar_one_or_none()
 
-            if assessment:
-                assessment.regional_evidence = fusion_result.regional_evidence
-                assessment.regional_confidence = fusion_result.regional_confidence
-                assessment.regional_severity = fusion_result.regional_severity
-                assessment.regional_risk = fusion_result.regional_risk
-                assessment.node_count = fusion_result.node_count
-                assessment.agreement_index = fusion_result.agreement_index
-                assessment.spatial_extent_m = fusion_result.spatial_extent_m
-                assessment.last_updated = current_time
+            if regional_assessment:
+                regional_assessment.regional_evidence = fusion_result.regional_evidence
+                regional_assessment.regional_confidence = fusion_result.regional_confidence
+                regional_assessment.regional_severity = fusion_result.regional_severity
+                regional_assessment.regional_risk = fusion_result.regional_risk
+                regional_assessment.node_count = fusion_result.node_count
+                regional_assessment.agreement_index = fusion_result.agreement_index
+                regional_assessment.spatial_extent_m = fusion_result.spatial_extent_m
+                if hasattr(fusion_result, 'information_condition'):
+                    regional_assessment.information_condition = fusion_result.information_condition
 
             await session.commit()
 

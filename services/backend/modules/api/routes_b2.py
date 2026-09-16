@@ -8,11 +8,12 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, and_
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel, Field
 import uuid
 
 from db.database import get_db_session
-from db.models_b2 import Incident, RegionalHazardAssessment, IncidentObservation, NodeStatus
+from db.models_b2 import Incident, RegionalHazardAssessment, IncidentHazardAssessment, IncidentObservation, NodeStatus
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +21,36 @@ router_b2 = APIRouter()
 
 
 # Response models
-class IncidentResponse(BaseModel):
-    """Incident response"""
-    incident_id: str
+class HazardAssessmentResponse(BaseModel):
+    """Incident-level hazard assessment response (Phase 2C-2 canonical model)"""
+    assessment_id: int
     hazard_type: str
+    evidence: Optional[float]
+    confidence: Optional[float]
+    severity: Optional[float]
+    operational_risk: Optional[float]
+    state: Optional[str]
+    information_condition: Optional[str]
+    hazard_specific_data: Optional[dict]
+    assessment_timestamp: datetime
+    model_version: Optional[str]
+    source_summary: Optional[dict]
+    created_at: datetime
+
+
+class IncidentResponse(BaseModel):
+    """Incident response
+
+    Phase 2C-3C: Incident is a pure correlation container.
+    Per-hazard information is in hazard_assessments array.
+    """
+    incident_id: str
     state: str
     information_condition: Optional[str]
-    severity_index: Optional[float]
-    risk_index: Optional[float]
-    confidence_index: Optional[float]
+
+    # Canonical multi-hazard representation (Phase 2C-2)
+    hazard_assessments: List[HazardAssessmentResponse] = Field(default_factory=list)
+
     centroid: Optional[dict] = None  # {lat, lon}
     first_observed_at: datetime
     last_observed_at: datetime
@@ -83,6 +105,9 @@ async def get_incidents(
 ):
     """Get list of incidents
 
+    Phase 2C-3C: Query by hazard_type uses JOIN through IncidentHazardAssessment.
+    Incident no longer has single hazard_type field.
+
     Args:
         hazard_type: Optional hazard type filter (fire, flood, etc.)
         state: Optional state filter
@@ -94,10 +119,18 @@ async def get_incidents(
         List of incidents
     """
     try:
-        query = select(Incident).order_by(desc(Incident.last_observed_at)).limit(limit)
+        query = (
+            select(Incident)
+            .options(selectinload(Incident.hazard_assessments))
+            .order_by(desc(Incident.last_observed_at))
+            .limit(limit)
+        )
 
         if hazard_type:
-            query = query.where(Incident.hazard_type == hazard_type)
+            # Phase 2C-3C: Query via IncidentHazardAssessment JOIN
+            query = query.join(IncidentHazardAssessment).where(
+                IncidentHazardAssessment.hazard_type == hazard_type
+            ).distinct()
 
         if state:
             query = query.where(Incident.state == state)
@@ -137,7 +170,9 @@ async def get_incident(
             raise HTTPException(status_code=400, detail=f"Invalid incident ID format: {incident_id}")
 
         result = await session.execute(
-            select(Incident).where(Incident.incident_id == incident_uuid)
+            select(Incident)
+            .options(selectinload(Incident.hazard_assessments))
+            .where(Incident.incident_id == incident_uuid)
         )
         incident = result.scalar_one_or_none()
 
@@ -290,7 +325,7 @@ async def get_incident_observations(
 # Helper functions
 
 def _incident_to_response(incident: Incident) -> IncidentResponse:
-    """Convert Incident model to response"""
+    """Convert Incident model to response (Phase 2C-2: includes hazard_assessments)"""
     centroid = None
     if incident.centroid_lat is not None and incident.centroid_lon is not None:
         centroid = {
@@ -298,14 +333,31 @@ def _incident_to_response(incident: Incident) -> IncidentResponse:
             "lon": incident.centroid_lon
         }
 
+    # Serialize hazard assessments (Phase 2C-2 canonical model)
+    hazard_assessments = []
+    if hasattr(incident, 'hazard_assessments') and incident.hazard_assessments:
+        for ha in incident.hazard_assessments:
+            hazard_assessments.append(HazardAssessmentResponse(
+                assessment_id=ha.assessment_id,
+                hazard_type=ha.hazard_type,
+                evidence=ha.evidence,
+                confidence=ha.confidence,
+                severity=ha.severity,
+                operational_risk=ha.operational_risk,
+                state=ha.state,
+                information_condition=ha.information_condition,
+                hazard_specific_data=ha.hazard_specific_data,
+                assessment_timestamp=ha.assessment_timestamp,
+                model_version=ha.model_version,
+                source_summary=ha.source_summary,
+                created_at=ha.created_at
+            ))
+
     return IncidentResponse(
         incident_id=str(incident.incident_id),
-        hazard_type=incident.hazard_type,
         state=incident.state,
         information_condition=incident.information_condition,
-        severity_index=incident.severity_index,
-        risk_index=incident.risk_index,
-        confidence_index=incident.confidence_index,
+        hazard_assessments=hazard_assessments,  # Canonical representation
         centroid=centroid,
         first_observed_at=incident.first_observed_at,
         last_observed_at=incident.last_observed_at,

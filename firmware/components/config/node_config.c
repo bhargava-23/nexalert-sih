@@ -21,7 +21,7 @@ node_config_complete_t node_config_default(void)
     node_config_complete_t config = {
         // Node identity
         .identity = {
-            .node_id = "node1",
+            .node_id = "NODE-001",    // Canonical format: NODE-[0-9]{3,}
             .latitude = 12.9716,      // Bangalore coordinates (DEMO)
             .longitude = 77.5946,
             .altitude = 920.0f,
@@ -33,11 +33,17 @@ node_config_complete_t node_config_default(void)
             .warmup_ms = 2000,        // 2 seconds sensor warmup
         },
 
-        // MQTT configuration (LOCKED TOPIC FORMAT)
+        // WiFi configuration - Track 3A: Matches recovered Arduino
+        .wifi = {
+            .ssid = "NexAlert_Field_Net",  // Track 3A: Field network SSID
+            .password = "",                 // TODO: Set actual password from recovered deployment
+        },
+
+        // MQTT configuration (LOCKED TOPIC FORMAT) - Track 3A: Matches recovered Arduino
         .mqtt = {
-            .broker_host = "192.168.1.100",  // DEMO: Raspberry Pi local IP
+            .broker_host = "10.42.0.1",  // Track 3A: Raspberry Pi field broker
             .broker_port = 1883,
-            .topic = "Nexalert/telemetry/node1",  // LOCKED canonical format
+            .topic = "Nexalert/telemetry/node1",  // Track 3A: Matches recovered Arduino topic
             .tls_enabled = false,
             .username = "",           // No auth for local broker
             .password = "",

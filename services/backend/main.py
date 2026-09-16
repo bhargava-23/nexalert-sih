@@ -13,6 +13,7 @@ from db.database import DatabaseConfig, db_config
 from modules.api.routes import router as api_router
 from modules.api.routes_b2 import router_b2 as api_router_b2
 from modules.api.routes_c import router_c as api_router_c
+from modules.api.routes_demo import router as demo_router
 from modules.ingestion.mqtt_consumer import MQTTTelemetryConsumer
 
 # Configure logging
@@ -101,6 +102,7 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api", tags=["api"])
 app.include_router(api_router_b2, prefix="/api", tags=["api-b2"])
 app.include_router(api_router_c, prefix="/api", tags=["api-c"])
+app.include_router(demo_router, prefix="", tags=["demo"])  # Demo routes at root for simplicity
 
 
 @app.get("/")
