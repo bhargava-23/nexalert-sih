@@ -13,6 +13,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <math.h>
+#include <inttypes.h>
 
 static const char *TAG = "hardware_json";
 
@@ -129,7 +130,7 @@ esp_err_t hardware_json_generate(
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGD(TAG, "Generated hardware JSON, sequence=%u, size=%d bytes",
+    ESP_LOGD(TAG, "Generated hardware JSON, sequence=%" PRIu32 ", size=%zu bytes",
              hw_state.sequence, strlen(*out_json));
     return ESP_OK;
 }
