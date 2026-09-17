@@ -41,15 +41,21 @@ esp_err_t mpu6050_init(const mpu6050_config_t* config)
     esp_err_t ret = i2c_bus_read(config->i2c_addr, MPU6050_REG_WHO_AM_I, &who_am_i, 1);
 
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "MPU6050 not found at 0x%02X", config->i2c_addr);
+        ESP_LOGE(TAG, "MPU6050/6500 not found at 0x%02X", config->i2c_addr);
         return ESP_ERR_NOT_FOUND;
     }
 
-    if (who_am_i != MPU6050_WHO_AM_I_VALUE) {
-        ESP_LOGE(TAG, "MPU6050 WHO_AM_I mismatch: expected 0x%02X, got 0x%02X",
-                 MPU6050_WHO_AM_I_VALUE, who_am_i);
+    // Accept both MPU6050 (WHO_AM_I=0x68) and MPU6500 (WHO_AM_I=0x70)
+    // Both chips are register-compatible for accelerometer operations
+    if (who_am_i != 0x68 && who_am_i != 0x70) {
+        ESP_LOGE(TAG, "MPU6050/6500 WHO_AM_I mismatch: expected 0x68 or 0x70, got 0x%02X",
+                 who_am_i);
         return ESP_ERR_NOT_FOUND;
     }
+
+    // Log detected chip
+    const char* chip_name = (who_am_i == 0x68) ? "MPU6050" : "MPU6500";
+    ESP_LOGI(TAG, "%s detected at 0x%02X (WHO_AM_I=0x%02X)", chip_name, config->i2c_addr, who_am_i);
 
     // Wake up MPU6050 (clear sleep bit)
     uint8_t pwr_mgmt = 0x00;
@@ -68,7 +74,6 @@ esp_err_t mpu6050_init(const mpu6050_config_t* config)
     }
 
     mpu6050_initialized = true;
-    ESP_LOGI(TAG, "MPU6050 initialized at 0x%02X", config->i2c_addr);
 
     return ESP_OK;
 }
