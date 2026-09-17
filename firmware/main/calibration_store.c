@@ -69,7 +69,7 @@ esp_err_t calibration_load(sensor_type_t type, const char* sensor_id, calibratio
     nvs_close(handle);
 
     if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Loaded calibration for %s: offset=%.4f, scale=%.4f, version=%u",
+        ESP_LOGI(TAG, "Loaded calibration for %s: offset=%.4f, scale=%.4f, version=%" PRIu32,
                  sensor_id, cal->offset, cal->scale, cal->version);
         cal->valid = true;
         return ESP_OK;
@@ -116,7 +116,7 @@ esp_err_t calibration_save(sensor_type_t type, const char* sensor_id, const cali
     nvs_close(handle);
 
     if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Saved calibration for %s: offset=%.4f, scale=%.4f, version=%u",
+        ESP_LOGI(TAG, "Saved calibration for %s: offset=%.4f, scale=%.4f, version=%" PRIu32,
                  sensor_id, cal->offset, cal->scale, cal->version);
     } else {
         ESP_LOGE(TAG, "Failed to commit calibration: %s", esp_err_to_name(ret));

@@ -5,6 +5,7 @@
  * CRITICAL INVARIANT: No telemetry != Environment normal
  */
 
+#include "node_config.h"      // For heartbeat_config_t definition
 #include "node_heartbeat.h"
 #include "esp_log.h"
 #include "esp_timer.h"

@@ -57,12 +57,12 @@ typedef struct {
 } evidence_config_t;
 
 /**
- * Sensor reading entry
+ * Evidence sensor reading entry (renamed to avoid collision with sensor_api.h)
  */
 typedef struct {
     char sensor[EVIDENCE_MAX_SENSOR_NAME];  // Sensor type identifier
     float value;                             // Sensor value (NAN = missing)
-} sensor_reading_t;
+} evidence_sensor_reading_t;
 
 /**
  * Evidence computation result
@@ -113,7 +113,7 @@ typedef struct {
  * Owner: Phase 5 implementation (requires domain expert validation)
  */
 evidence_result_t compute_evidence(
-    const sensor_reading_t* readings,
+    const evidence_sensor_reading_t* readings,
     uint8_t reading_count,
     const evidence_config_t* config,
     float epsilon
@@ -139,7 +139,7 @@ evidence_result_t compute_evidence(
  *   core_coverage = Σ(w_i × available_i) / Σ(w_i)
  */
 float compute_core_coverage(
-    const sensor_reading_t* readings,
+    const evidence_sensor_reading_t* readings,
     uint8_t reading_count,
     const evidence_rule_t* core_rules,
     uint8_t core_rule_count

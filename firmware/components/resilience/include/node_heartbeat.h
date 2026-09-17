@@ -40,13 +40,7 @@ typedef struct {
     float comm_integrity;            // Communication integrity [0,1] (NAN if unavailable)
 } node_health_t;
 
-/**
- * Heartbeat configuration
- */
-typedef struct {
-    uint32_t interval_ms;            // Heartbeat interval (milliseconds)
-    bool enabled;                    // Heartbeat enabled
-} heartbeat_config_t;
+// heartbeat_config_t is defined in node_config.h - include that to use it
 
 /**
  * Initialize heartbeat module

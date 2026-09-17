@@ -5,6 +5,7 @@
  * CRITICAL INVARIANT: Network failure != Edge intelligence failure
  */
 
+#include "node_config.h"      // For buffer_config_t definition
 #include "telemetry_buffer.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"

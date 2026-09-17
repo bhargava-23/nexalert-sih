@@ -185,6 +185,17 @@ baseline_state_result_t update_baseline_state(
 );
 
 /**
+ * Get baseline state name as string
+ *
+ * Args:
+ *   state: Baseline state
+ *
+ * Returns:
+ *   String representation of state
+ */
+const char* baseline_state_name(baseline_state_t state);
+
+/**
  * Get default baseline configuration (PROTOTYPE)
  *
  * Provenance: PROTOTYPE ASSUMPTIONS

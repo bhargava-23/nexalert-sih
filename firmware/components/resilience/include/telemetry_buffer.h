@@ -46,12 +46,7 @@ typedef struct {
     uint16_t payload_len;        // JSON payload length
 } message_metadata_t;
 
-/**
- * Buffer configuration
- */
-typedef struct {
-    uint16_t capacity;           // Maximum buffered messages (bounded)
-} buffer_config_t;
+// buffer_config_t is defined in node_config.h - include that to use it
 
 /**
  * Buffer statistics

@@ -206,3 +206,15 @@ baseline_config_t baseline_default_config(void)
 
     return config;
 }
+
+const char* baseline_state_name(baseline_state_t state)
+{
+    switch (state) {
+        case BASELINE_INITIALIZING: return "INITIALIZING";
+        case BASELINE_LEARNING:     return "LEARNING";
+        case BASELINE_READY:        return "READY";
+        case BASELINE_FROZEN:       return "FROZEN";
+        case BASELINE_RECOVERING:   return "RECOVERING";
+        default:                    return "UNKNOWN";
+    }
+}

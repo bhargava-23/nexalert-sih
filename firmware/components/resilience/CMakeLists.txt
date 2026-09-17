@@ -6,4 +6,5 @@ idf_component_register(
     SRCS "telemetry_buffer.c" "node_heartbeat.c"
     INCLUDE_DIRS "include"
     REQUIRES freertos esp_timer
+    PRIV_REQUIRES config
 )

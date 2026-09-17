@@ -66,7 +66,7 @@ static node_config_complete_t g_config;
 // Intelligence pipeline state (persistent across samples)
 // Baseline state (ENUM, not struct with .status field)
 static baseline_state_t baseline_current_state = BASELINE_INITIALIZING;
-static baseline_stats_t baseline_stats[2] = {0};  // Per-sensor baseline stats
+static baseline_result_t baseline_stats[2] = {0};  // [0] = temperature, [1] = humidity
 static uint16_t baseline_sample_count = 0;
 
 // Note: anomaly module is stateless (no anomaly_state_t type exists)
@@ -361,13 +361,7 @@ static void update_duration_tracking(
     }
 }
 
-/**
- * Helper: Check if baseline should freeze based on hazard state
- */
-static bool should_freeze_baseline(hazard_state_t state)
-{
-    return (state >= HAZARD_STATE_CONFIRMED);
-}
+// Baseline freeze logic moved to hazard_state.h API (non-static declaration)
 
 /**
  * Main sampling task: Complete intelligence pipeline
@@ -430,7 +424,7 @@ static void sampling_task(void *pvParameters)
     // Track 3A: Initialize MQ-2 gas sensor (raw ADC)
     mq2_config_t mq2_cfg = {
         .gpio_pin = 4,           // GPIO4 for MQ-2 (was DHT22 pin)
-        .adc_channel = ADC1_CHANNEL_3,  // GPIO4 = ADC1_CH3 on ESP32-S3
+        .adc_channel = ADC_CHANNEL_3,  // GPIO4 = ADC_CH3 on ESP32-S3 (not ADC1_CHANNEL_3)
     };
     ret = mq2_init(&mq2_cfg);
     if (ret != ESP_OK) {
@@ -509,7 +503,8 @@ static void sampling_task(void *pvParameters)
         float temp_c = temp_reading.valid ? temp_reading.value : NAN;
         float humidity_pct = humid_reading.valid ? humid_reading.value : NAN;
         float pressure_hpa = pressure_reading.valid ? pressure_reading.value : NAN;
-        float gas_resistance_adc = gas_reading.valid ? gas_reading.value : NAN;
+        // Note: gas_resistance_adc from BME680 is not used in Track 4 intelligence
+        // (void)gas_reading;  // BME680 gas resistance not integrated yet
         float vibration_mps2 = accel_reading.valid ? sqrtf(accel_reading.x * accel_reading.x +
                                                            accel_reading.y * accel_reading.y +
                                                            accel_reading.z * accel_reading.z) : NAN;
@@ -578,9 +573,6 @@ static void sampling_task(void *pvParameters)
         // baseline_config_t has: min_samples_init, min_samples_learning, recovery_stability_samples, max_history, epsilon
         // NO window_size or alpha fields exist
 
-        // Check if baseline should freeze
-        bool should_freeze = should_freeze_baseline(hazard_current_state);
-
         // Update baseline state
         const char* hazard_state_str = hazard_state_name(hazard_current_state);
 
@@ -592,25 +584,29 @@ static void sampling_task(void *pvParameters)
             hazard_persistence_counter
         );
 
-        if (baseline_transition.transition_occurred) {
+        // Check if state changed
+        if (baseline_transition.next_state != baseline_current_state) {
             ESP_LOGI(TAG, "Baseline state transition: %s → %s",
                      baseline_state_name(baseline_current_state),
-                     baseline_state_name(baseline_transition.new_state));
-            baseline_current_state = baseline_transition.new_state;
+                     baseline_state_name(baseline_transition.next_state));
+            baseline_current_state = baseline_transition.next_state;
         }
+
+        // Update hazard persistence counter from baseline module
+        hazard_persistence_counter = baseline_transition.stability_count;
 
         // Track 4: Accumulate samples and compute baseline stats
         update_baseline_stats(temp_c, humidity_pct);
 
         // Compute z-scores if baseline stats are ready
-        baseline_result_t z_temp_result = {.z_score = 0.0f, .valid = false};
-        baseline_result_t z_humid_result = {.z_score = 0.0f, .valid = false};
+        zscore_result_t z_temp_result = {.z_score = 0.0f, .valid = false};
+        zscore_result_t z_humid_result = {.z_score = 0.0f, .valid = false};
 
         if (baseline_current_state >= BASELINE_READY && !isnan(temp_c) && baseline_stats[0].valid) {
-            z_temp_result = compute_baseline_z_score(temp_c, &baseline_stats[0]);
+            z_temp_result = compute_z_score(temp_c, baseline_stats[0].median, baseline_stats[0].scale, 1e-9f);
         }
         if (baseline_current_state >= BASELINE_READY && !isnan(humidity_pct) && baseline_stats[1].valid) {
-            z_humid_result = compute_baseline_z_score(humidity_pct, &baseline_stats[1]);
+            z_humid_result = compute_z_score(humidity_pct, baseline_stats[1].median, baseline_stats[1].scale, 1e-9f);
         }
 
         float z_temp = z_temp_result.valid ? z_temp_result.z_score : NAN;
@@ -665,7 +661,7 @@ static void sampling_task(void *pvParameters)
             .use_core_floor = true,
         };
 
-        sensor_reading_t evidence_readings[] = {
+        evidence_sensor_reading_t evidence_readings[] = {
             {.sensor = "temperature", .value = temp_c},
             {.sensor = "humidity", .value = humidity_pct},
         };
@@ -749,14 +745,15 @@ static void sampling_task(void *pvParameters)
         float t_h = NAN;
         if (!isnan(temp_rate)) {
             float max_temp_rate = 10.0f / 60.0f;  // °C/s (10°C/min from reference severity.py:64)
-            t_h = compute_temporal(fabsf(temp_rate), max_temp_rate);
+            float abs_rate = fabsf(temp_rate);
+            t_h = (abs_rate >= max_temp_rate) ? 1.0f : (abs_rate / max_temp_rate);
         }
 
         // Duration component
         // Track 4: Track time above fire threshold
         float fire_threshold = 50.0f;  // °C (from reference severity.py:74)
-        uint32_t current_time_ms = (uint32_t)(esp_timer_get_time() / 1000);
-        update_duration_tracking(temp_c, fire_threshold, current_time_ms);
+        uint32_t current_time_ms2 = (uint32_t)(esp_timer_get_time() / 1000);
+        update_duration_tracking(temp_c, fire_threshold, current_time_ms2);
 
         float d_h = NAN;
         if (g_intelligence_history.duration_active) {

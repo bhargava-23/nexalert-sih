@@ -18,9 +18,9 @@
 /**
  * Helper: Find sensor reading by name
  */
-static const sensor_reading_t* find_sensor(
+static const evidence_sensor_reading_t* find_sensor(
     const char* sensor_name,
-    const sensor_reading_t* readings,
+    const evidence_sensor_reading_t* readings,
     uint8_t reading_count
 )
 {
@@ -33,7 +33,7 @@ static const sensor_reading_t* find_sensor(
 }
 
 evidence_result_t compute_evidence(
-    const sensor_reading_t* readings,
+    const evidence_sensor_reading_t* readings,
     uint8_t reading_count,
     const evidence_config_t* config,
     float epsilon
@@ -65,7 +65,7 @@ evidence_result_t compute_evidence(
         total_weight += rule->weight;
 
         // Find sensor reading
-        const sensor_reading_t* reading = find_sensor(rule->sensor, readings, reading_count);
+        const evidence_sensor_reading_t* reading = find_sensor(rule->sensor, readings, reading_count);
         if (reading != NULL && !isnan(reading->value)) {
             available_sensor_count++;
             // Check if matches threshold
@@ -81,7 +81,7 @@ evidence_result_t compute_evidence(
         total_weight += rule->weight;
 
         // Find sensor reading
-        const sensor_reading_t* reading = find_sensor(rule->sensor, readings, reading_count);
+        const evidence_sensor_reading_t* reading = find_sensor(rule->sensor, readings, reading_count);
         if (reading != NULL && !isnan(reading->value)) {
             available_sensor_count++;
             // Check if matches threshold
@@ -138,7 +138,7 @@ evidence_result_t compute_evidence(
 }
 
 float compute_core_coverage(
-    const sensor_reading_t* readings,
+    const evidence_sensor_reading_t* readings,
     uint8_t reading_count,
     const evidence_rule_t* core_rules,
     uint8_t core_rule_count
@@ -156,7 +156,7 @@ float compute_core_coverage(
         total_core_weight += rule->weight;
 
         // Find sensor reading
-        const sensor_reading_t* reading = find_sensor(rule->sensor, readings, reading_count);
+        const evidence_sensor_reading_t* reading = find_sensor(rule->sensor, readings, reading_count);
         if (reading != NULL && !isnan(reading->value)) {
             available_core_weight += rule->weight;
         }
