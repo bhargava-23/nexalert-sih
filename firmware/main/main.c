@@ -74,6 +74,38 @@ static hazard_state_t hazard_current_state = HAZARD_STATE_NORMAL;
 static uint16_t hazard_persistence_counter = 0;
 static float hazard_resolved_hold_start = NAN;
 
+// Track 4: History buffers for temporal/duration tracking
+#define HISTORY_SIZE 10  // Last 10 samples for rate-of-change
+#define BASELINE_HISTORY_SIZE 50  // Accumulate samples before computing baseline
+
+static struct {
+    // Temperature history (circular buffer)
+    float temp_history[HISTORY_SIZE];
+    uint32_t temp_timestamps_ms[HISTORY_SIZE];
+    uint8_t temp_index;
+    uint8_t temp_count;
+
+    // Humidity history (circular buffer)
+    float humid_history[HISTORY_SIZE];
+    uint32_t humid_timestamps_ms[HISTORY_SIZE];
+    uint8_t humid_index;
+    uint8_t humid_count;
+
+    // Duration tracking
+    float time_above_fire_threshold_s;
+    uint32_t duration_start_ms;
+    bool duration_active;
+} g_intelligence_history = {0};
+
+// Sample accumulation for baseline computation
+static struct {
+    float temp_samples[BASELINE_HISTORY_SIZE];
+    uint16_t temp_count;
+
+    float humid_samples[BASELINE_HISTORY_SIZE];
+    uint16_t humid_count;
+} g_baseline_history = {0};
+
 // Statistics
 static uint32_t g_sample_count = 0;
 static uint32_t g_failed_samples = 0;
@@ -212,8 +244,131 @@ static void send_heartbeat_if_due(void)
 }
 
 /**
+ * Track 4: Accumulate samples and compute baseline stats when ready
+ */
+static void update_baseline_stats(float temp_c, float humidity_pct)
+{
+    baseline_config_t cfg = baseline_default_config();
+
+    // Accumulate temperature samples
+    if (!isnan(temp_c) && g_baseline_history.temp_count < BASELINE_HISTORY_SIZE) {
+        g_baseline_history.temp_samples[g_baseline_history.temp_count++] = temp_c;
+    }
+
+    // Accumulate humidity samples
+    if (!isnan(humidity_pct) && g_baseline_history.humid_count < BASELINE_HISTORY_SIZE) {
+        g_baseline_history.humid_samples[g_baseline_history.humid_count++] = humidity_pct;
+    }
+
+    // Compute baseline stats when we have enough samples and baseline is LEARNING or READY
+    if (baseline_current_state >= BASELINE_LEARNING) {
+        // Temperature baseline
+        if (g_baseline_history.temp_count >= cfg.min_samples_learning && !baseline_stats[0].valid) {
+            baseline_stats[0] = compute_robust_baseline(
+                g_baseline_history.temp_samples,
+                g_baseline_history.temp_count,
+                cfg.epsilon
+            );
+            if (baseline_stats[0].valid) {
+                ESP_LOGI(TAG, "Temperature baseline computed: median=%.2f, scale=%.2f",
+                         baseline_stats[0].median, baseline_stats[0].scale);
+            }
+        }
+
+        // Humidity baseline
+        if (g_baseline_history.humid_count >= cfg.min_samples_learning && !baseline_stats[1].valid) {
+            baseline_stats[1] = compute_robust_baseline(
+                g_baseline_history.humid_samples,
+                g_baseline_history.humid_count,
+                cfg.epsilon
+            );
+            if (baseline_stats[1].valid) {
+                ESP_LOGI(TAG, "Humidity baseline computed: median=%.2f, scale=%.2f",
+                         baseline_stats[1].median, baseline_stats[1].scale);
+            }
+        }
+    }
+}
+
+/**
+ * Track 4: Compute rate of change from history
+ * Returns: rate in units/second, or NAN if insufficient history
+ */
+static float compute_rate_of_change(
+    const float* history,
+    const uint32_t* timestamps_ms,
+    uint8_t count,
+    uint8_t index
+)
+{
+    if (count < 2) {
+        return NAN;  // Need at least 2 samples
+    }
+
+    // Get most recent sample
+    uint8_t latest_idx = (index > 0) ? (index - 1) : (count - 1);
+    float latest_value = history[latest_idx];
+    uint32_t latest_time_ms = timestamps_ms[latest_idx];
+
+    // Get oldest sample
+    uint8_t oldest_idx = (count < HISTORY_SIZE) ? 0 : index;
+    float oldest_value = history[oldest_idx];
+    uint32_t oldest_time_ms = timestamps_ms[oldest_idx];
+
+    // Compute rate
+    float delta_value = latest_value - oldest_value;
+    float delta_time_s = (float)(latest_time_ms - oldest_time_ms) / 1000.0f;
+
+    if (delta_time_s < 0.1f) {
+        return NAN;  // Too short interval
+    }
+
+    return delta_value / delta_time_s;  // units/second
+}
+
+/**
+ * Track 4: Update duration tracking for threshold exceedance
+ */
+static void update_duration_tracking(
+    float current_value,
+    float threshold,
+    uint32_t current_time_ms
+)
+{
+    if (isnan(current_value)) {
+        // Missing value: reset duration
+        g_intelligence_history.duration_active = false;
+        g_intelligence_history.time_above_fire_threshold_s = 0.0f;
+        return;
+    }
+
+    if (current_value >= threshold) {
+        // Above threshold
+        if (!g_intelligence_history.duration_active) {
+            // Just crossed threshold: start duration
+            g_intelligence_history.duration_active = true;
+            g_intelligence_history.duration_start_ms = current_time_ms;
+            g_intelligence_history.time_above_fire_threshold_s = 0.0f;
+        } else {
+            // Still above: update duration
+            uint32_t elapsed_ms = current_time_ms - g_intelligence_history.duration_start_ms;
+            g_intelligence_history.time_above_fire_threshold_s = (float)elapsed_ms / 1000.0f;
+        }
+    } else {
+        // Below threshold: reset
+        g_intelligence_history.duration_active = false;
+        g_intelligence_history.time_above_fire_threshold_s = 0.0f;
+    }
+}
+
+/**
  * Helper: Check if baseline should freeze based on hazard state
  */
+static bool should_freeze_baseline(hazard_state_t state)
+{
+    return (state >= HAZARD_STATE_CONFIRMED);
+}
+
 /**
  * Main sampling task: Complete intelligence pipeline
  */
@@ -290,6 +445,10 @@ static void sampling_task(void *pvParameters)
     while (1) {
         g_sample_count++;
         ESP_LOGI(TAG, "=== Sample %lu ===", g_sample_count);
+
+        // Track 4: Capture measurement timestamp BEFORE sensor acquisition
+        // Repository semantic: age = t_now - t_measurement (confidence.py:183-229)
+        uint32_t measurement_time_ms = (uint32_t)(esp_timer_get_time() / 1000);
 
         // ========== SENSOR ACQUISITION - TRACK 3A ==========
         // BME680: Temperature, Humidity, Pressure, Gas Resistance
@@ -379,13 +538,14 @@ static void sampling_task(void *pvParameters)
         // GATE 2: Quality (Q_i) - per sensor
         // Current API: quality_result_t compute_quality(float q_integrity, float q_stability)
         // q_integrity: 1.0 if valid reading, NAN if missing
-        // q_stability: Requires signal variance history - PROTOTYPE LIMITATION: use NAN (not available)
+        // q_stability: Variance/stability not computed → NAN (missing) per quality.py:35
+        // Per quality.py specification: None input → None output (preserve missing != zero)
         float q_integrity_temp = temp_reading.valid ? 1.0f : NAN;
-        float q_stability_temp = NAN;  // PROTOTYPE: No variance history yet
+        float q_stability_temp = NAN;  // Stability not measured → missing per repository specification
         quality_result_t Q_temp_result = compute_quality(q_integrity_temp, q_stability_temp);
 
         float q_integrity_humid = humid_reading.valid ? 1.0f : NAN;
-        float q_stability_humid = NAN;  // PROTOTYPE: No variance history yet
+        float q_stability_humid = NAN;  // Stability not measured → missing per repository specification
         quality_result_t Q_humid_result = compute_quality(q_integrity_humid, q_stability_humid);
 
         float Q_temp = Q_temp_result.valid ? Q_temp_result.q_i : NAN;
@@ -439,18 +599,17 @@ static void sampling_task(void *pvParameters)
             baseline_current_state = baseline_transition.new_state;
         }
 
-        // PROTOTYPE LIMITATION: Baseline stats computation not yet implemented
-        // Would need to accumulate sample history and call compute_robust_baseline()
-        // For now, z-scores will be invalid until baseline stats are populated
+        // Track 4: Accumulate samples and compute baseline stats
+        update_baseline_stats(temp_c, humidity_pct);
+
+        // Compute z-scores if baseline stats are ready
         baseline_result_t z_temp_result = {.z_score = 0.0f, .valid = false};
         baseline_result_t z_humid_result = {.z_score = 0.0f, .valid = false};
 
-        if (baseline_current_state >= BASELINE_READY && !isnan(temp_c)) {
-            // baseline_stats[0] would need to be populated with compute_robust_baseline()
-            // Passing uninitialized stats returns invalid, preserving missing != zero
+        if (baseline_current_state >= BASELINE_READY && !isnan(temp_c) && baseline_stats[0].valid) {
             z_temp_result = compute_baseline_z_score(temp_c, &baseline_stats[0]);
         }
-        if (baseline_current_state >= BASELINE_READY && !isnan(humidity_pct)) {
+        if (baseline_current_state >= BASELINE_READY && !isnan(humidity_pct) && baseline_stats[1].valid) {
             z_humid_result = compute_baseline_z_score(humidity_pct, &baseline_stats[1]);
         }
 
@@ -524,11 +683,23 @@ static void sampling_task(void *pvParameters)
         if (!isnan(temp_c)) c_cov += 0.7f;  // Temperature available
         if (!isnan(humidity_pct)) c_cov += 0.3f;  // Humidity available
 
-        // c_agree: Group-level agreement (PROTOTYPE LIMITATION: requires multi-sensor variance, not yet implemented)
-        float c_agree = NAN;  // No multi-sensor variance computation yet
+        // c_agree: Evidence group agreement (per confidence.py:90-150)
+        // Repository semantics: Agreement evaluated across evidence GROUPS, not individual sensors
+        // Fire hazard evidence groups:
+        //   - Thermal group: temperature + humidity (correlated readings from same phenomenon)
+        //   - Smoke group: unavailable (no smoke sensor)
+        // Active evidence groups: 1 (thermal only)
+        // Per confidence.py:151: len(valid_groups) == 1 → returns 1.0 (single source = no disagreement)
+        float c_agree = 1.0f;
 
-        // c_temp: Temporal confidence (PROTOTYPE LIMITATION: requires freshness tracking, not yet implemented)
-        float c_temp = NAN;  // No measurement age tracking yet
+        // c_temp: Temporal confidence (per confidence.py:183-229)
+        // Repository semantic: age = t_now - t_measurement
+        // measurement_time_ms captured before sensor acquisition (line ~448)
+        // current_time_ms captured during intelligence computation
+        uint32_t current_time_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        float telemetry_age_seconds = (float)(current_time_ms - measurement_time_ms) / 1000.0f;
+        float max_age_seconds = 300.0f;  // 5 minutes (repository default, confidence.py:194)
+        float c_temp = compute_temporal_confidence(telemetry_age_seconds, max_age_seconds);
 
         // c_base: Baseline confidence (maps baseline readiness)
         float c_base = NAN;
@@ -567,13 +738,31 @@ static void sampling_task(void *pvParameters)
         }
 
         // Temporal component (rate of change)
-        // PROTOTYPE LIMITATION: Requires historical measurements for rate-of-change, not yet implemented
-        // DO NOT use anomaly magnitude as fake temporal rate
-        float t_h = NAN;  // No rate-of-change tracking yet
+        // Track 4: Compute from history
+        float temp_rate = compute_rate_of_change(
+            g_intelligence_history.temp_history,
+            g_intelligence_history.temp_timestamps_ms,
+            g_intelligence_history.temp_count,
+            g_intelligence_history.temp_index
+        );
+
+        float t_h = NAN;
+        if (!isnan(temp_rate)) {
+            float max_temp_rate = 10.0f / 60.0f;  // °C/s (10°C/min from reference severity.py:64)
+            t_h = compute_temporal(fabsf(temp_rate), max_temp_rate);
+        }
 
         // Duration component
-        // PROTOTYPE LIMITATION: Requires history tracking, not yet implemented
-        float d_h = NAN;  // No duration tracking yet
+        // Track 4: Track time above fire threshold
+        float fire_threshold = 50.0f;  // °C (from reference severity.py:74)
+        uint32_t current_time_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        update_duration_tracking(temp_c, fire_threshold, current_time_ms);
+
+        float d_h = NAN;
+        if (g_intelligence_history.duration_active) {
+            float max_duration = 3600.0f;  // seconds (1 hour, from reference severity.py:73)
+            d_h = compute_duration(g_intelligence_history.time_above_fire_threshold_s, max_duration);
+        }
 
         severity_weights_t sev_weights = {
             .w_I = 0.5f,  // Intensity weight
@@ -707,6 +896,26 @@ static void sampling_task(void *pvParameters)
 
         // ========== HEARTBEAT ==========
         send_heartbeat_if_due();
+
+        // Track 4: Update history buffers (circular buffers)
+        // Use measurement_time_ms (captured before sensor acquisition) for history timestamps
+        if (!isnan(temp_c)) {
+            g_intelligence_history.temp_history[g_intelligence_history.temp_index] = temp_c;
+            g_intelligence_history.temp_timestamps_ms[g_intelligence_history.temp_index] = measurement_time_ms;
+            g_intelligence_history.temp_index = (g_intelligence_history.temp_index + 1) % HISTORY_SIZE;
+            if (g_intelligence_history.temp_count < HISTORY_SIZE) {
+                g_intelligence_history.temp_count++;
+            }
+        }
+
+        if (!isnan(humidity_pct)) {
+            g_intelligence_history.humid_history[g_intelligence_history.humid_index] = humidity_pct;
+            g_intelligence_history.humid_timestamps_ms[g_intelligence_history.humid_index] = measurement_time_ms;
+            g_intelligence_history.humid_index = (g_intelligence_history.humid_index + 1) % HISTORY_SIZE;
+            if (g_intelligence_history.humid_count < HISTORY_SIZE) {
+                g_intelligence_history.humid_count++;
+            }
+        }
 
         // Wait for next sampling period
         vTaskDelay(pdMS_TO_TICKS(g_config.sampling.interval_ms));
