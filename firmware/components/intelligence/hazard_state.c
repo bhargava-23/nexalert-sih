@@ -93,7 +93,6 @@ state_transition_t update_state(
 
     hazard_state_t new_state = current_state;
     uint16_t new_counter = persistence_counter;
-    bool transition_occurred = false;
     char reason_buffer[256] = "";
 
     // State transition logic
@@ -108,7 +107,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "NORMAL → WATCH: Risk/anomaly crosses watch threshold (R_h=%.2f, A_h=%.2f)",
                              is_valid(R_h) ? R_h : 0.0f, is_valid(A_h) ? A_h : 0.0f);
-                    transition_occurred = true;
                     new_counter = 0;
                 }
             } else {
@@ -129,7 +127,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "WATCH → CONFIRMED (fast path): E_h=%.2f, S_h=%.2f, C_h=%.2f",
                              E_h, S_h, C_h);
-                    transition_occurred = true;
                     new_counter = 0;
                 }
             }
@@ -140,7 +137,6 @@ state_transition_t update_state(
                     new_state = HAZARD_STATE_SUSPECTED;
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "WATCH → SUSPECTED: Evidence crosses suspected threshold (E_h=%.2f)", E_h);
-                    transition_occurred = true;
                     new_counter = 0;
                 }
             }
@@ -153,7 +149,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "WATCH → RESOLVED: Evidence and risk below resolution thresholds (E_h=%.2f, R_h=%.2f)",
                              E_h, R_h);
-                    transition_occurred = true;
                     new_counter = 0;
                     result.resolved_hold_start = timestamp;
                 }
@@ -176,7 +171,6 @@ state_transition_t update_state(
                     new_state = HAZARD_STATE_CRITICAL;
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "SUSPECTED → CRITICAL (fast path): S_h=%.2f, T_h=%.2f", S_h, T_h);
-                    transition_occurred = true;
                     new_counter = 0;
                 }
             }
@@ -191,7 +185,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "SUSPECTED → CONFIRMED: High evidence + confidence + coverage (E_h=%.2f, C_h=%.2f, core=%.2f)",
                              E_h, C_h, core_cov);
-                    transition_occurred = true;
                     new_counter = 0;
                 }
             }
@@ -202,7 +195,6 @@ state_transition_t update_state(
                     new_state = HAZARD_STATE_WATCH;
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "SUSPECTED → WATCH: Evidence drops below threshold (E_h=%.2f)", E_h);
-                    transition_occurred = true;
                     new_counter = 0;
                 }
             }
@@ -215,7 +207,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "SUSPECTED → RESOLVED: Evidence and risk below resolution thresholds (E_h=%.2f, R_h=%.2f)",
                              E_h, R_h);
-                    transition_occurred = true;
                     new_counter = 0;
                     result.resolved_hold_start = timestamp;
                 }
@@ -235,7 +226,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "CONFIRMED → CRITICAL: Extreme severity or risk (S_h=%.2f, R_h=%.2f)",
                              is_valid(S_h) ? S_h : 0.0f, is_valid(R_h) ? R_h : 0.0f);
-                    transition_occurred = true;
                     new_counter = 0;
                 }
             }
@@ -250,7 +240,6 @@ state_transition_t update_state(
                              "CONFIRMED → SUSPECTED: Evidence/confidence/coverage drops (E_h=%.2f, C_h=%.2f, core=%.2f)",
                              is_valid(E_h) ? E_h : 0.0f, is_valid(C_h) ? C_h : 0.0f,
                              is_valid(core_cov) ? core_cov : 0.0f);
-                    transition_occurred = true;
                     new_counter = 0;
                 }
             }
@@ -263,7 +252,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "CONFIRMED → RESOLVED: Evidence and risk below resolution thresholds (E_h=%.2f, R_h=%.2f)",
                              E_h, R_h);
-                    transition_occurred = true;
                     new_counter = 0;
                     result.resolved_hold_start = timestamp;
                 }
@@ -283,7 +271,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "CRITICAL → CONFIRMED: Severity and risk drop (S_h=%.2f, R_h=%.2f)",
                              S_h, R_h);
-                    transition_occurred = true;
                     new_counter = 0;
                 }
             }
@@ -296,7 +283,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "CRITICAL → RESOLVED: Evidence and risk below resolution thresholds (E_h=%.2f, R_h=%.2f)",
                              E_h, R_h);
-                    transition_occurred = true;
                     new_counter = 0;
                     result.resolved_hold_start = timestamp;
                 }
@@ -321,7 +307,6 @@ state_transition_t update_state(
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "RESOLVED → NORMAL: Hold period complete (%.1fs)",
                              timestamp - resolved_hold_start);
-                    transition_occurred = true;
                     new_counter = 0;
                     result.resolved_hold_start = NAN;
                 } else {
@@ -329,7 +314,6 @@ state_transition_t update_state(
                     new_state = HAZARD_STATE_WATCH;
                     snprintf(reason_buffer, sizeof(reason_buffer),
                              "RESOLVED → WATCH: Conditions worsen during hold");
-                    transition_occurred = true;
                     new_counter = 0;
                     result.resolved_hold_start = NAN;
                 }
@@ -340,7 +324,6 @@ state_transition_t update_state(
                 new_state = HAZARD_STATE_WATCH;
                 snprintf(reason_buffer, sizeof(reason_buffer),
                          "RESOLVED → WATCH: Re-escalation during hold");
-                transition_occurred = true;
                 new_counter = 0;
                 result.resolved_hold_start = NAN;
             }

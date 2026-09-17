@@ -42,7 +42,7 @@ esp_err_t mq2_init(const mq2_config_t* config)
     mq2_channel = config->adc_channel;
     adc_oneshot_chan_cfg_t chan_config = {
         .bitwidth = ADC_BITWIDTH_12,  // 0-4095
-        .atten = ADC_ATTEN_DB_11,     // 0-3.3V range
+        .atten = ADC_ATTEN_DB_12,     // 12 dB attenuation, 0-3.3V range (ADC_ATTEN_DB_11 deprecated in ESP-IDF 5.1.7)
     };
 
     ret = adc_oneshot_config_channel(adc1_handle, mq2_channel, &chan_config);
