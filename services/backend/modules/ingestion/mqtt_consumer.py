@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .validator import TelemetryValidator, parse_telemetry_payload
 from .persister import TelemetryPersister
+from .track3c_normalizer import Track3CNormalizer
+from .node_registry import NodeRegistry, initialize_registry, refresh_registry
 from db.database import get_db_config
 from modules.intelligence.b2_coordinator import get_coordinator
 

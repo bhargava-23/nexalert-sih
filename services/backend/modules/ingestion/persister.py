@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from geoalchemy2.elements import WKTElement
 
-from db.models import Node, TelemetryRecord
+from db.models import Node, TelemetryRecord, SensorAssessment, HazardAssessment
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,11 @@ class TelemetryPersister:
             # 3. Insert telemetry record
             await self._insert_telemetry(session, payload, received_timestamp)
 
-            # 4. Commit transaction
+            # 4. Persist intelligence assessments (if present in payload)
+            await self._persist_sensor_assessments(session, telemetry_id, node_id, payload)
+            await self._persist_hazard_assessments(session, telemetry_id, payload)
+
+            # 5. Commit transaction
             await session.commit()
 
             logger.info(
@@ -227,3 +231,85 @@ class TelemetryPersister:
         )
 
         session.add(record)
+
+    async def _persist_sensor_assessments(
+        self,
+        session: AsyncSession,
+        telemetry_id: str,
+        node_id: str,
+        payload: dict
+    ):
+        """Persist sensor assessment records (Track 5)
+
+        Args:
+            session: Database session
+            telemetry_id: Telemetry ID to link assessments to
+            node_id: Node ID
+            payload: Telemetry envelope (may contain sensor_assessments)
+
+        Track 5: Master-side intelligence persistence
+        - sensor_assessments field is optional (backward compatibility)
+        - MISSING != ZERO: null assessment fields preserved
+        """
+        sensor_assessments = payload.get("sensor_assessments", [])
+        if not sensor_assessments:
+            return  # No assessments to persist
+
+        for assessment in sensor_assessments:
+            record = SensorAssessment(
+                telemetry_id=telemetry_id,
+                node_id=node_id,
+                sensor_type=assessment["sensor_type"],
+                health=assessment.get("health"),  # NULL if missing
+                quality=assessment.get("quality"),
+                reliability=assessment.get("reliability"),
+                baseline_state=assessment.get("baseline_state"),
+                anomaly=assessment.get("anomaly"),
+                created_at=datetime.utcnow()
+            )
+            session.add(record)
+
+        logger.debug(
+            f"Persisted {len(sensor_assessments)} sensor assessments "
+            f"for telemetry_id={telemetry_id}"
+        )
+
+    async def _persist_hazard_assessments(
+        self,
+        session: AsyncSession,
+        telemetry_id: str,
+        payload: dict
+    ):
+        """Persist hazard assessment records (Track 5)
+
+        Args:
+            session: Database session
+            telemetry_id: Telemetry ID to link assessments to
+            payload: Telemetry envelope (may contain hazard_assessments)
+
+        Track 5: Master-side intelligence persistence
+        - hazard_assessments field is optional (backward compatibility)
+        - MISSING != ZERO: null assessment fields preserved
+        """
+        hazard_assessments = payload.get("hazard_assessments", [])
+        if not hazard_assessments:
+            return  # No assessments to persist
+
+        for assessment in hazard_assessments:
+            record = HazardAssessment(
+                telemetry_id=telemetry_id,
+                hazard_type=assessment["hazard_type"],
+                evidence=assessment.get("evidence"),  # NULL if missing
+                confidence=assessment.get("confidence"),
+                severity=assessment.get("severity"),
+                risk=assessment.get("risk"),
+                state=assessment.get("state"),
+                information_condition=assessment.get("information_condition"),
+                created_at=datetime.utcnow()
+            )
+            session.add(record)
+
+        logger.debug(
+            f"Persisted {len(hazard_assessments)} hazard assessments "
+            f"for telemetry_id={telemetry_id}"
+        )
