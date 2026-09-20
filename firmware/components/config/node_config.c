@@ -36,7 +36,7 @@ node_config_complete_t node_config_default(void)
         // WiFi configuration - Track 3A: Matches recovered Arduino
         .wifi = {
             .ssid = "NexAlert_Field_Net",  // Track 3A: Field network SSID
-            .password = "",                 // TODO: Set actual password from recovered deployment
+            .password = "NexAlert1234",                 // TODO: Set actual password from recovered deployment
         },
 
         // MQTT configuration (LOCKED TOPIC FORMAT) - Track 3A: Matches recovered Arduino

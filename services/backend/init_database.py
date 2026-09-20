@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """Initialize NexAlert database schema
 
 Creates all tables from SQLAlchemy models using Base.metadata.create_all().
@@ -29,9 +29,10 @@ from db.models_b2 import (
     NodeStatus
 )
 from db.models_c import (
-    FireSpreadModel,
-    FireSpreadModelRun,
-    FireSpreadModelResult
+    FireSimulation,
+    FireGeometry,
+    RiskSurface,
+    Exposure,
 )
 
 
