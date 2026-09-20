@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgis/postgis:15-3.3
+    image: sogis/postgis:15-3.3
     container_name: nexalert-postgres
     environment:
       POSTGRES_DB: nexalert_dev
