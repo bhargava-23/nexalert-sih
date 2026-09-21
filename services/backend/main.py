@@ -47,7 +47,19 @@ async def lifespan(app: FastAPI):
         # await global_db_config.init_db()
         logger.info("Database connection established")
 
-        # 2. Start MQTT consumer
+        # 2. Initialize node registry (required for Track 3C normalization)
+        logger.info("Initializing node registry...")
+        from modules.ingestion.node_registry import initialize_registry, refresh_registry
+        registry = initialize_registry()
+
+        # Load nodes from database
+        async for session in global_db_config.get_session():
+            await refresh_registry(session)
+            break  # Only need one session to load registry
+
+        logger.info(f"Node registry initialized with {registry.size()} nodes")
+
+        # 3. Start MQTT consumer
         logger.info("Starting MQTT telemetry consumer...")
         mqtt_consumer = MQTTTelemetryConsumer(
             broker_host=settings.mqtt_broker_host,
@@ -63,6 +75,9 @@ async def lifespan(app: FastAPI):
         logger.info("MQTT consumer started")
 
         logger.info("NexAlert Backend started successfully")
+        logger.info(
+            f"Track 3C normalization ready: {registry.size()} nodes registered"
+        )
 
         yield
 
