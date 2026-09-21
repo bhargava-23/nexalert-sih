@@ -5,5 +5,5 @@
 idf_component_register(
     SRCS "telemetry_envelope.c" "hardware_json.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_timer json esp_hw_support
+    REQUIRES esp_timer json esp_hw_support network
 )
