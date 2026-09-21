@@ -6,7 +6,8 @@ Location resolution for Track 3C canonical telemetry mapping.
 import logging
 from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, cast
+from geoalchemy2 import Geometry
 from geoalchemy2.functions import ST_X, ST_Y, ST_Z
 
 from db.models import Node
@@ -42,15 +43,18 @@ class NodeRegistry:
         """
         try:
             # Query all nodes with location geometry
+            # Cast Geography to Geometry for coordinate extraction
+            location_geom = cast(Node.location, Geometry)
+
             result = await session.execute(
                 select(
                     Node.node_id,
                     Node.status,
                     Node.firmware_version,
                     Node.location,
-                    ST_Y(Node.location).label("lat"),
-                    ST_X(Node.location).label("lon"),
-                    ST_Z(Node.location).label("alt")
+                    ST_Y(location_geom).label("lat"),
+                    ST_X(location_geom).label("lon"),
+                    ST_Z(location_geom).label("alt")
                 )
             )
             rows = result.all()
