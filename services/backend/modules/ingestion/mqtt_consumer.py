@@ -55,9 +55,12 @@ class MQTTTelemetryConsumer:
         self.password = password
         self.reconnect_delay_s = reconnect_delay_s
 
-        # Initialize validator and persister
+        # Initialize validator, persister, and Track 3C normalizer
         self.validator = TelemetryValidator(schema_path)
         self.persister = TelemetryPersister()
+
+        # Track 3C normalizer (node registry loaded at startup)
+        self.normalizer: Optional[Track3CNormalizer] = None
 
         # MQTT client
         self.client = mqtt.Client(client_id=client_id, protocol=mqtt.MQTTv5)
@@ -128,35 +131,57 @@ class MQTTTelemetryConsumer:
         Args:
             raw_payload: Raw MQTT payload
 
-        Pipeline:
-        1. Parse JSON
-        2. Validate against schema
-        3. Persist to database
-        4. Update statistics
+        Pipeline (Track 5):
+        1. Parse hardware JSON
+        2. Track 3C normalization (hardware JSON → canonical telemetry.v1)
+        3. Validate canonical telemetry against schema
+        4. Persist to database
+        5. Update statistics
 
         Does NOT crash on errors - logs and continues.
         """
         try:
             received_timestamp = datetime.utcnow()
 
-            # 1. Parse JSON
+            # 1. Parse hardware JSON
             payload, parse_error = parse_telemetry_payload(raw_payload)
             if parse_error:
                 logger.warning(f"Parse failed: {parse_error}")
                 self.stats["messages_invalid"] += 1
                 return
 
-            # 2. Validate against schema
-            is_valid, validation_error = self.validator.validate(payload)
+            # 2. Track 3C normalization (hardware JSON → canonical telemetry.v1)
+            if self.normalizer is None:
+                logger.error("Track 3C normalizer not initialized. Skipping message.")
+                self.stats["messages_failed"] += 1
+                return
+
+            canonical_telemetry, normalization_error = await self.normalizer.normalize_hardware_json(
+                payload, received_timestamp
+            )
+
+            if normalization_error:
+                logger.warning(
+                    f"Track 3C normalization failed: {normalization_error}. "
+                    f"Node ID: {payload.get('node_id', 'UNKNOWN')}"
+                )
+                self.stats["messages_invalid"] += 1
+                return
+
+            # 3. Validate canonical telemetry against schema
+            is_valid, validation_error = self.validator.validate(canonical_telemetry)
             if not is_valid:
                 logger.warning(
                     f"Validation failed: {validation_error}. "
-                    f"Telemetry ID: {payload.get('telemetry_id', 'UNKNOWN')}"
+                    f"Telemetry ID: {canonical_telemetry.get('telemetry_id', 'UNKNOWN')}"
                 )
                 self.stats["messages_invalid"] += 1
                 return
 
             self.stats["messages_valid"] += 1
+
+            # Use canonical telemetry for persistence (not raw hardware JSON)
+            payload = canonical_telemetry
 
             # 3. Persist to database
             db_config = get_db_config()
@@ -248,6 +273,21 @@ class MQTTTelemetryConsumer:
         )
 
         try:
+            # Initialize Track 3C normalizer with node registry
+            from .node_registry import get_registry
+            try:
+                node_registry = get_registry()
+                self.normalizer = Track3CNormalizer(node_registry)
+                logger.info(
+                    f"Track 3C normalizer initialized with {node_registry.size()} nodes"
+                )
+            except RuntimeError as e:
+                logger.error(
+                    f"Track 3C normalizer initialization failed: {str(e)}. "
+                    f"Node registry not loaded. Call initialize_registry() first."
+                )
+                raise
+
             # Connect to broker
             self.client.connect(self.broker_host, self.broker_port, keepalive=60)
 
