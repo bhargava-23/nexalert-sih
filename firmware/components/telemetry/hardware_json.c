@@ -6,6 +6,7 @@
  */
 
 #include "hardware_json.h"
+#include "sntp_client.h"
 #include "cJSON.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -72,8 +73,14 @@ esp_err_t hardware_json_generate(
     // node_id
     cJSON_AddStringToObject(root, "node_id", hw_state.node_id);
 
-    // timestamp_ms (Unix milliseconds)
-    int64_t timestamp_ms = esp_timer_get_time() / 1000;  // Convert µs to ms
+    // timestamp_ms (Unix epoch milliseconds from SNTP)
+    bool is_wallclock = false;
+    int64_t timestamp_ms = sntp_get_timestamp_ms(&is_wallclock);
+
+    if (!is_wallclock) {
+        ESP_LOGW(TAG, "SNTP not synchronized, using uptime-based timestamp");
+    }
+
     cJSON_AddNumberToObject(root, "timestamp_ms", (double)timestamp_ms);
 
     // sequence
