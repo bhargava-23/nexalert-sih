@@ -24,7 +24,7 @@ export default function DashboardPage() {
       setError(null)
       const [nodesData, hazardsData] = await Promise.all([
         api.getNodes(),
-        api.getGlobalHazardAssessments()
+        api.getGlobalHazards()
       ])
 
       setNodes(nodesData)

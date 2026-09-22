@@ -26,8 +26,12 @@ async function fetchJSON<T>(endpoint: string): Promise<T> {
 
 export const api = {
   // Telemetry endpoints
-  async getLatestTelemetry(nodeId: string): Promise<TelemetryRecord> {
-    return fetchJSON<TelemetryRecord>(`/telemetry/latest/${nodeId}`)
+  async getLatestTelemetry(): Promise<TelemetryRecord[]> {
+    return fetchJSON<TelemetryRecord[]>('/telemetry/latest')
+  },
+
+  async getNodeTelemetry(nodeId: string, limit: number = 100): Promise<TelemetryRecord[]> {
+    return fetchJSON<TelemetryRecord[]>(`/telemetry/${nodeId}?limit=${limit}`)
   },
 
   // Node endpoints
@@ -49,12 +53,17 @@ export const api = {
   },
 
   // Hazard assessment endpoints
-  async getGlobalHazardAssessments(): Promise<HazardAssessment[]> {
-    return fetchJSON<HazardAssessment[]>('/hazard-assessments')
+  async getGlobalHazards(): Promise<HazardAssessment[]> {
+    return fetchJSON<HazardAssessment[]>('/hazards')
   },
 
   async getNodeHazardAssessments(nodeId: string): Promise<HazardAssessment[]> {
     return fetchJSON<HazardAssessment[]>(`/nodes/${nodeId}/hazard-assessments`)
+  },
+
+  // Health check
+  async getHealth(): Promise<{ status: string; timestamp: string; database: string }> {
+    return fetchJSON('/health')
   },
 }
 
