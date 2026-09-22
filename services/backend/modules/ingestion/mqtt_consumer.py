@@ -4,7 +4,7 @@ Subscribes to MQTT broker, receives telemetry, validates, and persists to databa
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import paho.mqtt.client as mqtt
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -145,6 +145,17 @@ class MQTTTelemetryConsumer:
 
             # 1. Parse hardware JSON
             payload, parse_error = parse_telemetry_payload(raw_payload)
+
+            # === TEMPORARY DEBUG: Log raw MQTT timestamp_ms ===
+            if payload and "timestamp_ms" in payload:
+                raw_ts_ms = payload["timestamp_ms"]
+                raw_ts_sec = raw_ts_ms / 1000.0
+                logger.info(
+                    f"[TIMESTAMP DEBUG] MQTT raw: timestamp_ms={raw_ts_ms}, "
+                    f"epoch_sec={raw_ts_sec:.3f}, "
+                    f"as_utc={datetime.fromtimestamp(raw_ts_sec, tz=timezone.utc).isoformat()}"
+                )
+            # === END DEBUG ===
             if parse_error:
                 logger.warning(f"Parse failed: {parse_error}")
                 self.stats["messages_invalid"] += 1
