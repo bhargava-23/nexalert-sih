@@ -141,21 +141,11 @@ class MQTTTelemetryConsumer:
         Does NOT crash on errors - logs and continues.
         """
         try:
-            received_timestamp = datetime.utcnow()
+            # Use timezone-aware UTC timestamp to ensure PostgreSQL interprets it correctly
+            received_timestamp = datetime.now(timezone.utc)
 
             # 1. Parse hardware JSON
             payload, parse_error = parse_telemetry_payload(raw_payload)
-
-            # === TEMPORARY DEBUG: Log raw MQTT timestamp_ms ===
-            if payload and "timestamp_ms" in payload:
-                raw_ts_ms = payload["timestamp_ms"]
-                raw_ts_sec = raw_ts_ms / 1000.0
-                logger.info(
-                    f"[TIMESTAMP DEBUG] MQTT raw: timestamp_ms={raw_ts_ms}, "
-                    f"epoch_sec={raw_ts_sec:.3f}, "
-                    f"as_utc={datetime.fromtimestamp(raw_ts_sec, tz=timezone.utc).isoformat()}"
-                )
-            # === END DEBUG ===
             if parse_error:
                 logger.warning(f"Parse failed: {parse_error}")
                 self.stats["messages_invalid"] += 1

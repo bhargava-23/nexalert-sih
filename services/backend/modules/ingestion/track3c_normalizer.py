@@ -111,18 +111,9 @@ class Track3CNormalizer:
             telemetry_id = str(ULID())
 
             # Convert timestamp_ms to ISO 8601
-            # === TEMPORARY DEBUG: Log Track 3C timestamp conversion ===
-            timestamp_sec = timestamp_ms / 1000.0
             measurement_timestamp = datetime.fromtimestamp(
-                timestamp_sec, tz=timezone.utc
+                timestamp_ms / 1000.0, tz=timezone.utc
             ).isoformat().replace("+00:00", "Z")
-
-            logger.info(
-                f"[TIMESTAMP DEBUG] Track3C: timestamp_ms={timestamp_ms}, "
-                f"epoch_sec={timestamp_sec:.3f}, "
-                f"converted_to={measurement_timestamp}"
-            )
-            # === END DEBUG ===
 
             received_timestamp_str = received_timestamp.isoformat().replace("+00:00", "Z")
 
