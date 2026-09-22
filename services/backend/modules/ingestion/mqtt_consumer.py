@@ -143,6 +143,15 @@ class MQTTTelemetryConsumer:
         try:
             received_timestamp = datetime.utcnow()
 
+            # === TEMPORARY DEBUG: Log receive_timestamp creation ===
+            logger.info(
+                f"[TIMESTAMP DEBUG] receive_timestamp created: "
+                f"utcnow={received_timestamp.isoformat()}, "
+                f"tzinfo={received_timestamp.tzinfo}, "
+                f"epoch={received_timestamp.timestamp() if received_timestamp.tzinfo else 'naive'}"
+            )
+            # === END DEBUG ===
+
             # 1. Parse hardware JSON
             payload, parse_error = parse_telemetry_payload(raw_payload)
 
