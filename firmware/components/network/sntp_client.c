@@ -104,7 +104,7 @@ int64_t sntp_get_timestamp_ms(bool* is_wallclock)
 
         ESP_LOGI(TAG, "=== TIMESTAMP DEBUG ===");
         ESP_LOGI(TAG, "  timestamp_ms: %lld", timestamp_ms);
-        ESP_LOGI(TAG, "  epoch_sec: %ld", tv.tv_sec);
+        ESP_LOGI(TAG, "  epoch_sec: %lld", (long long)tv.tv_sec);
         ESP_LOGI(TAG, "  TZ env: %s", tz_env ? tz_env : "(not set)");
         ESP_LOGI(TAG, "  gmtime_r (always UTC): %04d-%02d-%02d %02d:%02d:%02d",
                  utc_comp.tm_year + 1900, utc_comp.tm_mon + 1, utc_comp.tm_mday,
