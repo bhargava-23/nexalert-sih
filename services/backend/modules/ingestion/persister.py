@@ -66,12 +66,6 @@ class TelemetryPersister:
                 return True, None, existing.telemetry_id
 
             # 3. Insert telemetry record
-            # === TEMPORARY DEBUG: Log persister timestamp values ===
-            logger.info(
-                f"[TIMESTAMP DEBUG] Persister: measurement_ts={payload.get('measurement_timestamp')}, "
-                f"receive_ts={received_timestamp.isoformat()}"
-            )
-            # === END DEBUG ===
             await self._insert_telemetry(session, payload, received_timestamp)
 
             # 4. Persist intelligence assessments (if present in payload)
