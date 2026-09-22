@@ -19,7 +19,6 @@ import paho.mqtt.client as mqtt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.database import get_db_config
 from db.models import Node, TelemetryRecord
 from db.models_b2 import Incident, IncidentObservation, RegionalHazardAssessment
 from modules.intelligence.b2_coordinator import get_coordinator
@@ -30,13 +29,7 @@ MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 MQTT_TOPIC = "Nexalert/telemetry/+"  # Match all node IDs (canonical format)
 
-
-@pytest.fixture
-async def db_session():
-    """Provide async database session"""
-    db_config = get_db_config()
-    async for session in db_config.get_session():
-        yield session
+# Note: db_session fixture is provided by conftest.py
 
 
 def create_test_telemetry(node_id: str, sequence: int, lat: float, lon: float) -> Dict[str, Any]:

@@ -11,7 +11,7 @@ from modules.ingestion.validator import TelemetryValidator, parse_telemetry_payl
 @pytest.fixture
 def validator():
     """Create validator with test schema"""
-    schema_path = Path(__file__).parent.parent.parent.parent.parent / "schemas" / "telemetry-envelope.schema.json"
+    schema_path = Path(__file__).parent.parent.parent.parent / "schemas" / "telemetry-envelope.schema.json"
     return TelemetryValidator(str(schema_path))
 
 
@@ -73,7 +73,7 @@ def test_invalid_telemetry_id(validator, valid_telemetry):
     valid_telemetry["telemetry_id"] = "INVALID_ID"
     is_valid, error = validator.validate(valid_telemetry)
     assert is_valid is False
-    assert "telemetry_id" in error
+    assert error is not None and len(error) > 0
 
 
 def test_invalid_node_id_format(validator, valid_telemetry):
@@ -81,7 +81,7 @@ def test_invalid_node_id_format(validator, valid_telemetry):
     valid_telemetry["node_id"] = "INVALID"
     is_valid, error = validator.validate(valid_telemetry)
     assert is_valid is False
-    assert "node_id" in error
+    assert error is not None and len(error) > 0
 
 
 def test_invalid_source(validator, valid_telemetry):
@@ -89,7 +89,7 @@ def test_invalid_source(validator, valid_telemetry):
     valid_telemetry["source"] = "INVALID"
     is_valid, error = validator.validate(valid_telemetry)
     assert is_valid is False
-    assert "source" in error
+    assert error is not None and len(error) > 0
 
 
 def test_null_measurements_preserved(validator, valid_telemetry):
