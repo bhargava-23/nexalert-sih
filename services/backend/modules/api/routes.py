@@ -11,7 +11,7 @@ from sqlalchemy import select, desc
 from pydantic import BaseModel, Field
 
 from db.database import get_db_session
-from db.models import Node, TelemetryRecord, HazardAssessment
+from db.models import Node, TelemetryRecord, HazardAssessment, SensorAssessment
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,20 @@ class HazardResponse(BaseModel):
     risk: Optional[float] = None
     state: Optional[str] = None
     information_condition: Optional[str] = None
+    created_at: datetime
+
+
+class SensorAssessmentResponse(BaseModel):
+    """Sensor assessment response"""
+    assessment_id: int
+    telemetry_id: str
+    node_id: str
+    sensor_type: str
+    health: Optional[float] = None
+    quality: Optional[float] = None
+    reliability: Optional[float] = None
+    baseline_state: Optional[str] = None
+    anomaly: Optional[float] = None
     created_at: datetime
 
 
@@ -253,6 +267,123 @@ async def get_hazards(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/nodes/{node_id}/hazard-assessments", response_model=List[HazardResponse])
+async def get_node_hazard_assessments(
+    node_id: str,
+    hazard_type: Optional[str] = Query(None, description="Filter by hazard type"),
+    state: Optional[str] = Query(None, description="Filter by state"),
+    limit: int = Query(100, ge=1, le=1000),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Get hazard assessments for specific node
+
+    Args:
+        node_id: Node identifier
+        hazard_type: Optional hazard type filter (fire, flood, etc.)
+        state: Optional state filter (NORMAL, WATCH, SUSPECTED, CONFIRMED, CRITICAL, RESOLVED)
+        limit: Maximum assessments to return (default 100, max 1000)
+        session: Database session
+
+    Returns:
+        List of hazard assessments for the node
+    """
+    try:
+        # Join through TelemetryRecord to filter by node_id
+        query = (
+            select(HazardAssessment)
+            .join(TelemetryRecord, HazardAssessment.telemetry_id == TelemetryRecord.telemetry_id)
+            .where(TelemetryRecord.node_id == node_id)
+            .order_by(desc(HazardAssessment.created_at))
+            .limit(limit)
+        )
+
+        if hazard_type:
+            query = query.where(HazardAssessment.hazard_type == hazard_type)
+
+        if state:
+            query = query.where(HazardAssessment.state == state)
+
+        result = await session.execute(query)
+        assessments = result.scalars().all()
+
+        return [_hazard_to_response(assessment) for assessment in assessments]
+
+    except Exception as e:
+        logger.error(f"Failed to get hazard assessments for node {node_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/sensor-assessments", response_model=List[SensorAssessmentResponse])
+async def get_sensor_assessments(
+    sensor_type: Optional[str] = Query(None, description="Filter by sensor type"),
+    limit: int = Query(100, ge=1, le=1000),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Get sensor assessments (global)
+
+    Args:
+        sensor_type: Optional sensor type filter (e.g., bme680_temperature)
+        limit: Maximum assessments to return (default 100, max 1000)
+        session: Database session
+
+    Returns:
+        List of recent sensor assessments
+    """
+    try:
+        query = select(SensorAssessment).order_by(desc(SensorAssessment.created_at)).limit(limit)
+
+        if sensor_type:
+            query = query.where(SensorAssessment.sensor_type == sensor_type)
+
+        result = await session.execute(query)
+        assessments = result.scalars().all()
+
+        return [_sensor_to_response(assessment) for assessment in assessments]
+
+    except Exception as e:
+        logger.error(f"Failed to get sensor assessments: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/nodes/{node_id}/sensor-assessments", response_model=List[SensorAssessmentResponse])
+async def get_node_sensor_assessments(
+    node_id: str,
+    sensor_type: Optional[str] = Query(None, description="Filter by sensor type"),
+    limit: int = Query(100, ge=1, le=1000),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """Get sensor assessments for specific node
+
+    Args:
+        node_id: Node identifier
+        sensor_type: Optional sensor type filter (e.g., bme680_temperature)
+        limit: Maximum assessments to return (default 100, max 1000)
+        session: Database session
+
+    Returns:
+        List of sensor assessments for the node
+    """
+    try:
+        query = (
+            select(SensorAssessment)
+            .where(SensorAssessment.node_id == node_id)
+            .order_by(desc(SensorAssessment.created_at))
+            .limit(limit)
+        )
+
+        if sensor_type:
+            query = query.where(SensorAssessment.sensor_type == sensor_type)
+
+        result = await session.execute(query)
+        assessments = result.scalars().all()
+
+        return [_sensor_to_response(assessment) for assessment in assessments]
+
+    except Exception as e:
+        logger.error(f"Failed to get sensor assessments for node {node_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/health", response_model=HealthResponse)
 async def health_check(session: AsyncSession = Depends(get_db_session)):
     """Health check endpoint
@@ -368,5 +499,28 @@ def _hazard_to_response(assessment: HazardAssessment) -> HazardResponse:
         risk=assessment.risk,
         state=assessment.state,
         information_condition=assessment.information_condition,
+        created_at=assessment.created_at
+    )
+
+
+def _sensor_to_response(assessment: SensorAssessment) -> SensorAssessmentResponse:
+    """Convert SensorAssessment to response model
+
+    Args:
+        assessment: SensorAssessment database model
+
+    Returns:
+        SensorAssessmentResponse pydantic model
+    """
+    return SensorAssessmentResponse(
+        assessment_id=assessment.assessment_id,
+        telemetry_id=assessment.telemetry_id,
+        node_id=assessment.node_id,
+        sensor_type=assessment.sensor_type,
+        health=assessment.health,
+        quality=assessment.quality,
+        reliability=assessment.reliability,
+        baseline_state=assessment.baseline_state,
+        anomaly=assessment.anomaly,
         created_at=assessment.created_at
     )
