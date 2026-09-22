@@ -94,6 +94,27 @@ int64_t sntp_get_timestamp_ms(bool* is_wallclock)
         struct timeval tv;
         gettimeofday(&tv, NULL);
 
+        // === TEMPORARY DEBUG LOGGING - REMOVE AFTER VERIFICATION ===
+        struct tm utc_comp, local_comp;
+        gmtime_r(&tv.tv_sec, &utc_comp);
+        localtime_r(&tv.tv_sec, &local_comp);
+
+        char *tz_env = getenv("TZ");
+        int64_t timestamp_ms = (int64_t)tv.tv_sec * 1000LL + (int64_t)tv.tv_usec / 1000LL;
+
+        ESP_LOGI(TAG, "=== TIMESTAMP DEBUG ===");
+        ESP_LOGI(TAG, "  timestamp_ms: %lld", timestamp_ms);
+        ESP_LOGI(TAG, "  epoch_sec: %ld", tv.tv_sec);
+        ESP_LOGI(TAG, "  TZ env: %s", tz_env ? tz_env : "(not set)");
+        ESP_LOGI(TAG, "  gmtime_r (always UTC): %04d-%02d-%02d %02d:%02d:%02d",
+                 utc_comp.tm_year + 1900, utc_comp.tm_mon + 1, utc_comp.tm_mday,
+                 utc_comp.tm_hour, utc_comp.tm_min, utc_comp.tm_sec);
+        ESP_LOGI(TAG, "  localtime_r (uses TZ): %04d-%02d-%02d %02d:%02d:%02d",
+                 local_comp.tm_year + 1900, local_comp.tm_mon + 1, local_comp.tm_mday,
+                 local_comp.tm_hour, local_comp.tm_min, local_comp.tm_sec);
+        ESP_LOGI(TAG, "=======================");
+        // === END DEBUG ===
+
         if (is_wallclock != NULL) {
             *is_wallclock = true;
         }
