@@ -1,177 +1,241 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+// NexAlert Citizen Safety Experience
+// ONE PAGE: Normal Mode ↔ Emergency Mode transformation
+// Spec: docs/specification_text/14_citizen_safety_ui.md
 
-export default function CitizenEmergencyPage() {
-  const [alert, setAlert] = useState<any>(null)
+import { useEffect, useState } from 'react'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { LoadingState } from '@/components/ui/LoadingSpinner'
+import { ErrorState } from '@/components/ui/ErrorState'
+import { EmergencyHeader } from '@/components/EmergencyHeader'
+import { SafetyStatus } from '@/components/SafetyStatus'
+import { LocationHeader } from '@/components/LocationHeader'
+import { NearbyHazards } from '@/components/NearbyHazards'
+import { EnvironmentalConditions } from '@/components/EnvironmentalConditions'
+import { EmergencyActions } from '@/components/EmergencyActions'
+import { api } from '@/lib/api'
+import type { Incident, TelemetryRecord, GeolocationState, NearestHazard } from '@/types'
+import { calculateDistance } from '@/lib/utils'
+
+export default function CitizenPage() {
+  const [incidents, setIncidents] = useState<Incident[]>([])
+  const [telemetry, setTelemetry] = useState<TelemetryRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [location, setLocation] = useState<GeolocationState>({
+    latitude: null,
+    longitude: null,
+    accuracy: null,
+    error: null,
+    loading: false,
+  })
+
+  const fetchData = async () => {
+    try {
+      setError(null)
+      const [incidentsData, telemetryData] = await Promise.all([
+        api.getActiveIncidents(),
+        api.getLatestTelemetry(),
+      ])
+      setIncidents(incidentsData)
+      setTelemetry(telemetryData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load safety data')
+      console.error('Data fetch error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    // Check for active critical incidents
-    fetch('http://localhost:8000/api/incidents?state=CRITICAL')
-      .then(res => res.json())
-      .then(data => {
-        if (data.incidents && data.incidents.length > 0) {
-          setAlert(data.incidents[0])
-        }
-        setLoading(false)
-      })
-      .catch(() => {
-        // Demo mode - show example alert (Phase 2C-3C: canonical model)
-        setAlert({
-          state: 'CRITICAL',
-          centroid_lat: 12.9716,
-          centroid_lon: 77.5946,
-          distance_km: 1.8,
-          direction: 'NE',
-          hazard_assessments: [{
-            hazard_type: 'WILDFIRE',
-            severity: 0.91,
-            confidence: 0.89,
-            state: 'CONFIRMED'
-          }]
-        })
-        setLoading(false)
-      })
+    fetchData()
+    const interval = setInterval(fetchData, 10000) // Poll every 10 seconds
+    return () => clearInterval(interval)
   }, [])
+
+  const requestLocation = () => {
+    if (!navigator.geolocation) {
+      setLocation((prev) => ({ ...prev, error: 'Geolocation not supported' }))
+      return
+    }
+
+    setLocation((prev) => ({ ...prev, loading: true, error: null }))
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          error: null,
+          loading: false,
+        })
+      },
+      (error) => {
+        setLocation((prev) => ({
+          ...prev,
+          error: error.message || 'Location unavailable',
+          loading: false,
+        }))
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    )
+  }
+
+  // Find nearest hazard with CONFIRMED or CRITICAL state
+  const getNearestEmergency = (): NearestHazard | null => {
+    if (!location.latitude || !location.longitude || incidents.length === 0) {
+      return null
+    }
+
+    let nearest: NearestHazard | null = null
+    let minDistance = Infinity
+
+    incidents.forEach((incident) => {
+      // Only consider incidents with confirmed/critical hazards
+      const emergencyHazards = incident.hazard_assessments.filter(
+        (h) => h.state === 'CONFIRMED' || h.state === 'CRITICAL'
+      )
+
+      if (emergencyHazards.length > 0 && incident.centroid) {
+        const distance = calculateDistance(
+          location.latitude!,
+          location.longitude!,
+          incident.centroid.lat,
+          incident.centroid.lon
+        )
+
+        if (distance < minDistance) {
+          minDistance = distance
+          nearest = {
+            incident,
+            hazard: emergencyHazards[0], // Primary hazard
+            distanceKm: distance,
+          }
+        }
+      }
+    })
+
+    return nearest
+  }
+
+  const nearestEmergency = getNearestEmergency()
+
+  // EMERGENCY MODE: Any CONFIRMED or CRITICAL hazard exists
+  const isEmergencyMode = nearestEmergency !== null
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-stone-950 flex items-center justify-center">
-        <div className="text-stone-400">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingState message="Loading safety information..." />
       </div>
     )
   }
 
-  if (!alert) {
-    return <SafeMode />
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <ErrorState
+          title="Connection Error"
+          message={error}
+          onRetry={fetchData}
+        />
+      </div>
+    )
   }
 
-  return <EmergencyAlert alert={alert} />
-}
-
-function EmergencyAlert({ alert }: { alert: any }) {
+  // SAME PAGE - transforms based on mode
   return (
-    <div className="min-h-screen bg-gradient-to-b from-red-950 to-stone-950 text-stone-50 p-4">
-      <div className="max-w-md mx-auto pt-8">
-        {/* Emergency Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center text-3xl animate-pulse">
-              🚨
-            </div>
-          </div>
-          <h1 className="text-4xl font-bold mb-2">EMERGENCY ALERT</h1>
-          <div className="text-red-400 text-sm uppercase tracking-wider">
-            Immediate Action Required
-          </div>
-        </div>
+    <div className="min-h-screen pb-8">
+      <LocationHeader
+        location={location}
+        onRequestLocation={requestLocation}
+        emergencyMode={isEmergencyMode}
+      />
 
-        {/* Hazard Information */}
-        <div className="bg-stone-900/80 backdrop-blur border-2 border-red-500/50 rounded-2xl p-6 mb-6">
-          <div className="text-center mb-6">
-            <div className="text-5xl font-bold text-red-400 mb-2">
-              {alert.hazard_assessments?.[0]?.hazard_type || 'EMERGENCY'}
-            </div>
-            <div className="text-2xl font-bold">DETECTED</div>
-          </div>
-
-          <div className="space-y-4">
-            <InfoRow label="Severity" value="CRITICAL" valueClass="text-red-400" />
-            <InfoRow
-              label="Distance"
-              value={`${alert.distance_km || 1.8} km`}
-              valueClass="text-yellow-400"
+      <div className="max-w-screen-sm mx-auto px-4 py-6 space-y-6">
+        {isEmergencyMode && nearestEmergency ? (
+          <>
+            {/* EMERGENCY MODE */}
+            <EmergencyHeader
+              incident={nearestEmergency.incident}
+              hazard={nearestEmergency.hazard}
+              distanceKm={nearestEmergency.distanceKm}
+              userLocation={
+                location.latitude && location.longitude
+                  ? { lat: location.latitude, lon: location.longitude }
+                  : null
+              }
             />
-            <InfoRow
-              label="Direction"
-              value={alert.direction || 'NE'}
-              valueClass="text-yellow-400"
+
+            <EmergencyActions />
+
+            <NearbyHazards
+              incidents={incidents}
+              currentIncidentId={nearestEmergency.incident.incident_id}
+              userLocation={
+                location.latitude && location.longitude
+                  ? { lat: location.latitude, lon: location.longitude }
+                  : null
+              }
             />
-            <InfoRow
-              label="Updated"
-              value="Just now"
-              valueClass="text-stone-300"
+
+            <EnvironmentalConditions telemetry={telemetry} />
+
+            <GlassCard className="bg-red-500/5 border-red-500/20">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">ℹ️</div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-300 mb-1">
+                    Emergency Alert Active
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    Follow local authority instructions and official emergency guidance. NexAlert monitoring system is operational.
+                  </p>
+                </div>
+              </div>
+            </GlassCard>
+          </>
+        ) : (
+          <>
+            {/* NORMAL MODE */}
+            <SafetyStatus
+              incidents={incidents}
+              telemetry={telemetry}
             />
-          </div>
-        </div>
 
-        {/* Action Required */}
-        <div className="bg-red-500 text-white rounded-2xl p-6 mb-6 text-center">
-          <div className="text-2xl font-bold mb-2">EVACUATE IMMEDIATELY</div>
-          <div className="text-sm opacity-90">
-            Move to designated safe location
-          </div>
-        </div>
+            <EmergencyActions normalMode={true} />
 
-        {/* Action Buttons */}
-        <div className="space-y-3 mb-8">
-          <button className="w-full bg-stone-800 hover:bg-stone-700 border border-stone-600 text-white rounded-xl py-4 px-6 font-semibold text-lg transition-colors">
-            📍 VIEW SAFE LOCATION
-          </button>
-          <button className="w-full bg-red-600 hover:bg-red-700 text-white rounded-xl py-4 px-6 font-semibold text-lg transition-colors">
-            🆘 EMERGENCY SOS
-          </button>
-        </div>
+            {incidents.length > 0 && (
+              <NearbyHazards
+                incidents={incidents}
+                userLocation={
+                  location.latitude && location.longitude
+                    ? { lat: location.latitude, lon: location.longitude }
+                    : null
+                }
+              />
+            )}
 
-        {/* Emergency Info */}
-        <div className="bg-stone-900/50 rounded-xl p-4 text-sm text-stone-400 text-center">
-          <div className="mb-2">
-            <strong className="text-stone-300">Emergency Services:</strong> 112
-          </div>
-          <div>
-            Follow official evacuation routes and instructions
-          </div>
-        </div>
+            <EnvironmentalConditions telemetry={telemetry} />
+
+            <GlassCard className="bg-blue-500/5 border-blue-500/20">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">ℹ️</div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-300 mb-1">
+                    NexAlert Monitoring Active
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    Real-time environmental monitoring and hazard detection system operational. You&apos;ll be notified immediately if any hazard is detected.
+                  </p>
+                </div>
+              </div>
+            </GlassCard>
+          </>
+        )}
       </div>
-    </div>
-  )
-}
-
-function SafeMode() {
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-950 to-stone-950 text-stone-50 p-4">
-      <div className="max-w-md mx-auto pt-12">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center text-3xl">
-              ✓
-            </div>
-          </div>
-          <h1 className="text-4xl font-bold mb-2">ALL CLEAR</h1>
-          <div className="text-emerald-400 text-sm uppercase tracking-wider">
-            No Active Emergencies
-          </div>
-        </div>
-
-        <div className="bg-stone-900/80 backdrop-blur border border-stone-700 rounded-2xl p-6 mb-6">
-          <div className="text-center text-stone-300">
-            <p className="mb-4">Your area is currently safe.</p>
-            <p className="text-sm text-stone-400">
-              NexAlert is monitoring environmental conditions 24/7.
-              You will be notified immediately if any hazard is detected.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <button className="w-full bg-stone-800 hover:bg-stone-700 border border-stone-600 text-white rounded-xl py-4 px-6 font-semibold transition-colors">
-            📊 VIEW STATUS
-          </button>
-          <button className="w-full bg-stone-800 hover:bg-stone-700 border border-stone-600 text-white rounded-xl py-4 px-6 font-semibold transition-colors">
-            🆘 EMERGENCY SOS
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function InfoRow({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
-  return (
-    <div className="flex justify-between items-center py-2 border-b border-stone-700">
-      <span className="text-stone-400 text-sm">{label}</span>
-      <span className={`font-mono font-bold ${valueClass || ''}`}>{value}</span>
     </div>
   )
 }

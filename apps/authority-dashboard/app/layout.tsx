@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { MainNav } from '@/components/navigation/MainNav'
 
 export const metadata: Metadata = {
-  title: 'NexAlert Authority Dashboard',
-  description: 'Authority dashboard for NexAlert environmental monitoring system',
+  title: 'NexAlert Command Center',
+  description: 'Real-time hazard monitoring and intelligence dashboard',
 }
 
 export default function RootLayout({
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <MainNav />
+        {children}
+      </body>
     </html>
   )
 }
