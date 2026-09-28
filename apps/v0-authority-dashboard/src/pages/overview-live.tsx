@@ -2,7 +2,7 @@
  * V0 Authority Dashboard - Overview Page with Real Backend Integration
  *
  * This replaces the mock data Overview page with real API calls to:
- * http://192.168.29.178:8000/api/v1
+ * https://ideal-schema-stars-mounted.trycloudflare.com/api/v1
  */
 
 import { useState } from 'react';
@@ -86,7 +86,7 @@ export function OverviewPageLive() {
         <div className="mb-4 rounded-md border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
           <strong>Backend connection error:</strong> {nodesError.message}
           <div className="mt-2 text-xs text-red-400">
-            Verify backend is running at http://192.168.29.178:8000
+            Verify backend is running at https://ideal-schema-stars-mounted.trycloudflare.com
           </div>
         </div>
       )}

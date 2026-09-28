@@ -11,7 +11,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { PageHeader, ActionButton, SectionTitle } from '@/components/dashboard-components';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://192.168.29.178:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://ideal-schema-stars-mounted.trycloudflare.com/api/v1';
 
 interface Simulation {
   simulation_id: string;
