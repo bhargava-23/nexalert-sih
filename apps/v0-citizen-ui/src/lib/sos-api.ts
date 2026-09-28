@@ -3,7 +3,7 @@
  * Handles SOS requests to the backend
  */
 
-const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || 'http://192.168.29.178:8000';
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || 'https://raspberrypi.tail39c545.ts.net';
 
 export interface SOSRequest {
   location_lat?: number;
