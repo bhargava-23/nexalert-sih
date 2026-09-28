@@ -17,6 +17,7 @@ from modules.api.routes_demo import router as demo_router
 from modules.api.routes_test import router_test
 from modules.api.routes_ws import router_ws, manager as ws_manager
 from modules.api.routes_alerts import router_alerts
+from modules.api.routes_sos import router as router_sos
 from modules.ingestion.mqtt_consumer import MQTTTelemetryConsumer
 
 # Configure logging
@@ -121,6 +122,7 @@ app.include_router(api_router, prefix="/api/v1", tags=["api"])
 app.include_router(api_router_b2, prefix="/api", tags=["api-b2"])
 app.include_router(api_router_c, prefix="/api", tags=["api-c"])
 app.include_router(router_alerts, prefix="/api/v1", tags=["alerts"])  # Alert & Web Push routes
+app.include_router(router_sos, prefix="/api/v1", tags=["sos"])  # SOS emergency requests
 app.include_router(demo_router, prefix="", tags=["demo"])  # Demo routes at root for simplicity
 app.include_router(router_test, prefix="/api", tags=["test"])  # Canonical test routes
 
