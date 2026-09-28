@@ -47,7 +47,7 @@ describe('Schema Synchronization', () => {
       },
       measurements: {
         temp_c: 25.5,
-        pm25_ugm3: 45.0
+        pm25_ug_m3: 45.0
       },
       diagnostics: {
         uptime_s: 1234,
@@ -83,7 +83,7 @@ describe('Schema Synchronization', () => {
         alt: undefined  // Missing altitude
       },
       measurements: {
-        temperature_c: undefined,
+        temp_c: undefined,
         humidity_pct: undefined
       },
       diagnostics: {},

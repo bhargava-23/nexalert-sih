@@ -94,50 +94,99 @@ export async function getVapidPublicKey(): Promise<string> {
 
 /**
  * Convert base64 URL-safe string to Uint8Array
+ * Handles both URL-safe and standard base64 formats
+ * Critical for VAPID key in PushManager.subscribe()
  */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
+  try {
+    // Remove any whitespace
+    base64String = base64String.trim();
+
+    // Add padding if needed
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+
+    // Convert URL-safe base64 to standard base64
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+    // Decode base64 to binary string
+    const rawData = window.atob(base64);
+
+    // Convert binary string to Uint8Array
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; i++) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+
+    console.log('[WebPush] Converted VAPID key:', outputArray.length, 'bytes');
+    return outputArray;
+  } catch (error) {
+    console.error('[WebPush] VAPID key conversion failed:', error);
+    throw new Error('Invalid VAPID public key format');
   }
-  return outputArray;
 }
 
 /**
  * Subscribe to push notifications
+ * Enhanced error handling for mobile browsers
  */
 export async function subscribeToPush(
   registration: ServiceWorkerRegistration
 ): Promise<PushSubscriptionData> {
   try {
     // Get VAPID public key from backend
+    console.log('[WebPush] Fetching VAPID public key from backend...');
     const vapidPublicKey = await getVapidPublicKey();
+    console.log('[WebPush] VAPID key received, length:', vapidPublicKey.length);
+
+    // Convert to Uint8Array for PushManager.subscribe()
     const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
 
-    // Subscribe to push
+    // Subscribe to push with VAPID key
+    console.log('[WebPush] Calling PushManager.subscribe()...');
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey
     });
 
-    console.log('[WebPush] Push subscription created:', subscription);
+    console.log('[WebPush] ✅ Push subscription created successfully');
+    console.log('[WebPush] Endpoint:', subscription.endpoint);
+
+    // Verify subscription has required keys
+    const p256dhKey = subscription.getKey('p256dh');
+    const authKey = subscription.getKey('auth');
+
+    if (!p256dhKey || !authKey) {
+      throw new Error('Subscription missing required keys (p256dh or auth)');
+    }
 
     // Convert subscription to data format
     const subscriptionData: PushSubscriptionData = {
       endpoint: subscription.endpoint,
       keys: {
-        p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
-        auth: arrayBufferToBase64(subscription.getKey('auth')!)
+        p256dh: arrayBufferToBase64(p256dhKey),
+        auth: arrayBufferToBase64(authKey)
       }
     };
 
+    console.log('[WebPush] Subscription data prepared for backend');
     return subscriptionData;
-  } catch (error) {
+  } catch (error: any) {
     console.error('[WebPush] Push subscription failed:', error);
-    throw error;
+
+    // Provide helpful error messages for common issues
+    if (error.name === 'NotAllowedError') {
+      throw new Error('Push subscription denied by browser or user');
+    } else if (error.name === 'NotSupportedError') {
+      throw new Error('Push messaging not supported on this device/browser');
+    } else if (error.name === 'InvalidStateError') {
+      throw new Error('Service worker is not in active state');
+    } else if (error.message?.includes('VAPID')) {
+      throw new Error(`VAPID key error: ${error.message}`);
+    } else {
+      throw error;
+    }
   }
 }
 
@@ -191,34 +240,95 @@ export async function sendSubscriptionToBackend(
 
 /**
  * Complete push notification setup flow
+ * Improved error handling with specific failure stages
  */
 export async function setupPushNotifications(
   location?: { lat: number; lon: number }
 ): Promise<{ subscription_id: string; subscription: PushSubscriptionData }> {
-  // Check support
-  if (!isPushSupported()) {
-    throw new Error('Push notifications not supported in this browser');
+  try {
+    // STAGE 1: Check support
+    if (!isPushSupported()) {
+      throw new Error('STAGE: Browser Support - Push notifications not supported in this browser');
+    }
+
+    // STAGE 2: Request permission
+    let permission: NotificationPermission;
+    try {
+      permission = await requestNotificationPermission();
+    } catch (error: any) {
+      throw new Error(`STAGE: Permission Request - ${error.message || 'Permission request failed'}`);
+    }
+
+    if (permission !== 'granted') {
+      throw new Error(`STAGE: Permission Denied - User ${permission === 'denied' ? 'denied' : 'dismissed'} notification permission`);
+    }
+
+    // STAGE 3: Register service worker
+    let registration: ServiceWorkerRegistration;
+    try {
+      registration = await registerServiceWorker();
+    } catch (error: any) {
+      throw new Error(`STAGE: Service Worker Registration - ${error.message || 'Failed to register service worker'}`);
+    }
+
+    // STAGE 4: Check for and handle existing subscription
+    try {
+      const existingSub = await registration.pushManager.getSubscription();
+      if (existingSub) {
+        console.log('[WebPush] Found existing subscription, checking compatibility...');
+
+        // Try to determine if subscription is compatible
+        // If we can't verify, unsubscribe to be safe
+        try {
+          const isCompatible = await isSubscriptionCompatible();
+          if (!isCompatible) {
+            console.log('[WebPush] Existing subscription incompatible (VAPID changed), unsubscribing...');
+            await existingSub.unsubscribe();
+          }
+        } catch (compatError) {
+          // If we can't check compatibility, unsubscribe old one to be safe
+          console.log('[WebPush] Cannot verify compatibility, unsubscribing old subscription...');
+          await existingSub.unsubscribe();
+        }
+      }
+    } catch (error) {
+      console.warn('[WebPush] Failed to check existing subscription, continuing...', error);
+    }
+
+    // STAGE 5: Subscribe to push with VAPID key
+    let subscription: PushSubscriptionData;
+    try {
+      subscription = await subscribeToPush(registration);
+    } catch (error: any) {
+      // Provide specific error for PushManager.subscribe failures
+      if (error.name === 'NotAllowedError') {
+        throw new Error('STAGE: Push Subscribe - Permission denied by browser');
+      } else if (error.name === 'NotSupportedError') {
+        throw new Error('STAGE: Push Subscribe - Push messaging not supported');
+      } else if (error.name === 'InvalidStateError') {
+        throw new Error('STAGE: Push Subscribe - Service worker not active');
+      } else {
+        throw new Error(`STAGE: Push Subscribe - ${error.message || 'PushManager.subscribe() failed'}`);
+      }
+    }
+
+    // STAGE 6: Send to backend
+    let result: { subscription_id: string };
+    try {
+      result = await sendSubscriptionToBackend(subscription, location);
+    } catch (error: any) {
+      throw new Error(`STAGE: Backend Registration - ${error.message || 'Failed to register with backend'}`);
+    }
+
+    console.log('[WebPush] ✅ Push notifications enabled successfully');
+    return {
+      subscription_id: result.subscription_id,
+      subscription
+    };
+  } catch (error: any) {
+    // Re-throw with original error message if already formatted
+    throw error;
   }
-
-  // Request permission
-  const permission = await requestNotificationPermission();
-  if (permission !== 'granted') {
-    throw new Error(`Notification permission ${permission}`);
-  }
-
-  // Register service worker
-  const registration = await registerServiceWorker();
-
-  // Subscribe to push
-  const subscription = await subscribeToPush(registration);
-
-  // Send to backend
-  const result = await sendSubscriptionToBackend(subscription, location);
-
-  return {
-    subscription_id: result.subscription_id,
-    subscription
-  };
 }
 
 /**
