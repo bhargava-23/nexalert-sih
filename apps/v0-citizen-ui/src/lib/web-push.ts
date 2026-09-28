@@ -143,11 +143,22 @@ export async function subscribeToPush(
     // Convert to Uint8Array for PushManager.subscribe()
     const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
 
+    // Validate VAPID key format (must be 65 bytes, start with 0x04 for uncompressed P-256)
+    if (applicationServerKey.byteLength !== 65) {
+      throw new Error(`Invalid VAPID key length: ${applicationServerKey.byteLength} bytes (expected 65)`);
+    }
+    if (applicationServerKey[0] !== 4) {
+      throw new Error(`Invalid VAPID key format: first byte is 0x${applicationServerKey[0].toString(16)} (expected 0x04)`);
+    }
+    console.log('[WebPush] VAPID key validated: 65 bytes, starts with 0x04');
+
     // Subscribe to push with VAPID key
+    // IMPORTANT: Pass the underlying ArrayBuffer, not the Uint8Array wrapper
+    // Android Chrome requires ArrayBuffer specifically
     console.log('[WebPush] Calling PushManager.subscribe()...');
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey
+      applicationServerKey: applicationServerKey.buffer as ArrayBuffer
     });
 
     console.log('[WebPush] ✅ Push subscription created successfully');
