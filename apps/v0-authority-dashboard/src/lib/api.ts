@@ -61,6 +61,19 @@ export interface BackendIncident {
   resolved_at: string | null;
 }
 
+export interface BackendSOSRequest {
+  sos_id: string;
+  status: string;
+  location_lat?: number;
+  location_lon?: number;
+  message?: string;
+  device_info?: string;
+  created_at: string;
+  updated_at: string;
+  acknowledged_at?: string;
+  resolved_at?: string;
+}
+
 export interface BackendRegionalHazard {
   assessment_id: number;
   hazard_type: string;
@@ -220,6 +233,24 @@ export const api = {
    */
   async getHealth(): Promise<{ status: string; timestamp: string; database: string }> {
     return fetchJSON('/health');
+  },
+
+  /**
+   * Get all SOS emergency requests
+   */
+  async getSOSRequests(status?: string): Promise<BackendSOSRequest[]> {
+    const params = status ? `?status=${status}` : '';
+    return fetchJSON<BackendSOSRequest[]>(`/sos${params}`);
+  },
+
+  /**
+   * Update SOS request status
+   */
+  async updateSOSStatus(sosId: string, status: string): Promise<BackendSOSRequest> {
+    return fetchJSON<BackendSOSRequest>(`/sos/${sosId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
   },
 };
 
