@@ -11,7 +11,8 @@ import {
   setupPushNotifications,
   getExistingSubscription,
   isSubscriptionCompatible,
-  unsubscribeFromPush
+  unsubscribeFromPush,
+  type DiagnosticResult
 } from '@/lib/web-push';
 
 type NotificationState =
@@ -20,7 +21,7 @@ type NotificationState =
   | { status: 'not-subscribed' }
   | { status: 'subscribed'; subscription_id: string }
   | { status: 'subscribing' }
-  | { status: 'error'; error: string };
+  | { status: 'error'; error: string; diagnostic?: DiagnosticResult };
 
 export function NotificationSettings() {
   const [state, setState] = useState<NotificationState>({ status: 'checking' });
@@ -72,27 +73,28 @@ export function NotificationSettings() {
     setState({ status: 'subscribing' });
 
     try {
-      // Check if there's an existing subscription that needs to be unsubscribed
-      const existingSub = await getExistingSubscription();
-      if (existingSub) {
-        const isCompatible = await isSubscriptionCompatible();
-        if (!isCompatible) {
-          // VAPID key changed - unsubscribe old subscription first
-          console.log('[NotificationSettings] Unsubscribing old subscription before renewing');
-          await unsubscribeFromPush();
-        }
-      }
-
-      // Create new subscription with current VAPID key
-      // For now, we don't have real location - pass undefined
-      // In production, this would use the RealMap's user location
+      // Run diagnostic setup
       const result = await setupPushNotifications();
 
-      console.log('[NotificationSettings] Push notifications enabled:', result);
-      setState({ status: 'subscribed', subscription_id: result.subscription_id });
+      console.log('[NotificationSettings] Push notifications diagnostic complete:', result);
+
+      // Store diagnostic results in error state for display
+      if (result.diagnostic) {
+        setState({
+          status: 'error',
+          error: 'Web Push Diagnostic Complete',
+          diagnostic: result.diagnostic
+        });
+      } else {
+        setState({ status: 'subscribed', subscription_id: result.subscription_id || 'diagnostic' });
+      }
     } catch (error: any) {
       console.error('[NotificationSettings] Setup failed:', error);
-      setState({ status: 'error', error: error.message || 'Failed to enable notifications' });
+      setState({
+        status: 'error',
+        error: error.message || 'Failed to enable notifications',
+        diagnostic: (error as any).diagnostic
+      });
     }
   }
 
@@ -141,6 +143,100 @@ export function NotificationSettings() {
         <div className="rounded-xl border border-[#e7b1a5] bg-[#f6d9d2] p-3 text-sm text-[#923d34]">
           <AlertTriangle size={16} className="mb-1 inline" /> {state.error}
         </div>
+
+        {/* TEMPORARY WEB PUSH DIAGNOSTIC PANEL */}
+        {state.diagnostic && (
+          <div className="mt-4 space-y-2 rounded-xl border-2 border-[#5a6763] bg-[#f4f1ea] p-4 text-xs">
+            <div className="mb-3 text-sm font-bold text-[#195d52]">🔍 Web Push Diagnostic</div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <span className="font-semibold">Service worker active:</span>
+                <span className={state.diagnostic.serviceWorkerActive ? 'text-green-700' : 'text-red-700'}>
+                  {state.diagnostic.serviceWorkerActive ? 'PASS' : 'FAIL'}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="font-semibold">PushManager available:</span>
+                <span className={state.diagnostic.pushManagerAvailable ? 'text-green-700' : 'text-red-700'}>
+                  {state.diagnostic.pushManagerAvailable ? 'PASS' : 'FAIL'}
+                </span>
+              </div>
+
+              <div className="flex justify-between border-t border-[#d9d3c6] pt-1 mt-1">
+                <span className="font-semibold">Service worker scope:</span>
+                <span className="text-[#5a6763] break-all text-right max-w-[60%]">{state.diagnostic.scope}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="font-semibold">Current origin:</span>
+                <span className="text-[#5a6763] break-all text-right max-w-[60%]">{state.diagnostic.origin}</span>
+              </div>
+
+              <div className="flex justify-between border-t border-[#d9d3c6] pt-1 mt-1">
+                <span className="font-semibold">VAPID key length:</span>
+                <span className="text-[#5a6763]">{state.diagnostic.vapidKeyLength} bytes</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="font-semibold">VAPID first byte:</span>
+                <span className="text-[#5a6763]">{state.diagnostic.vapidFirstByte}</span>
+              </div>
+
+              <div className="border-t-2 border-[#5a6763] pt-2 mt-2">
+                <div className="font-bold text-[#195d52] mb-1">TEST A (no VAPID key):</div>
+                <div className="flex justify-between">
+                  <span className="font-semibold">Status:</span>
+                  <span className={state.diagnostic.testA.status === 'PASS' ? 'text-green-700 font-bold' : 'text-red-700 font-bold'}>
+                    {state.diagnostic.testA.status}
+                  </span>
+                </div>
+                {state.diagnostic.testA.status === 'FAIL' && (
+                  <>
+                    <div className="mt-1">
+                      <span className="font-semibold">Error name:</span> {state.diagnostic.testA.errorName}
+                    </div>
+                    <div className="mt-1">
+                      <span className="font-semibold">Error message:</span> {state.diagnostic.testA.errorMessage}
+                    </div>
+                  </>
+                )}
+                {state.diagnostic.testA.status === 'PASS' && state.diagnostic.testA.endpoint && (
+                  <div className="mt-1 break-all">
+                    <span className="font-semibold">Endpoint:</span> {state.diagnostic.testA.endpoint}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t-2 border-[#5a6763] pt-2 mt-2">
+                <div className="font-bold text-[#195d52] mb-1">TEST B (with NexAlert VAPID key):</div>
+                <div className="flex justify-between">
+                  <span className="font-semibold">Status:</span>
+                  <span className={state.diagnostic.testB.status === 'PASS' ? 'text-green-700 font-bold' : 'text-red-700 font-bold'}>
+                    {state.diagnostic.testB.status}
+                  </span>
+                </div>
+                {state.diagnostic.testB.status === 'FAIL' && (
+                  <>
+                    <div className="mt-1">
+                      <span className="font-semibold">Error name:</span> {state.diagnostic.testB.errorName}
+                    </div>
+                    <div className="mt-1">
+                      <span className="font-semibold">Error message:</span> {state.diagnostic.testB.errorMessage}
+                    </div>
+                  </>
+                )}
+                {state.diagnostic.testB.status === 'PASS' && state.diagnostic.testB.endpoint && (
+                  <div className="mt-1 break-all">
+                    <span className="font-semibold">Endpoint:</span> {state.diagnostic.testB.endpoint}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={handleEnableNotifications}

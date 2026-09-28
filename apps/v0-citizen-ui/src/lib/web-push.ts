@@ -13,6 +13,27 @@ export interface PushSubscriptionData {
   };
 }
 
+export interface DiagnosticResult {
+  serviceWorkerActive: boolean;
+  pushManagerAvailable: boolean;
+  scope: string;
+  origin: string;
+  vapidKeyLength: number;
+  vapidFirstByte: string;
+  testA: {
+    status: 'PASS' | 'FAIL';
+    errorName?: string;
+    errorMessage?: string;
+    endpoint?: string;
+  };
+  testB: {
+    status: 'PASS' | 'FAIL';
+    errorName?: string;
+    errorMessage?: string;
+    endpoint?: string;
+  };
+}
+
 /**
  * Check if push notifications are supported
  */
@@ -130,11 +151,23 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 /**
  * Subscribe to push notifications
  * DIAGNOSTIC MODE: Controlled differential diagnosis
+ * Returns diagnostic results for visual display
  */
 export async function subscribeToPush(
   registration: ServiceWorkerRegistration
-): Promise<PushSubscriptionData> {
+): Promise<{ subscriptionData?: PushSubscriptionData; diagnostic: DiagnosticResult }> {
   console.log('=== PUSHMANAGER.SUBSCRIBE() DIAGNOSTIC ===');
+
+  const diagnostic: DiagnosticResult = {
+    serviceWorkerActive: !!registration.active,
+    pushManagerAvailable: !!registration.pushManager,
+    scope: registration.scope || 'unknown',
+    origin: window.location.origin,
+    vapidKeyLength: 0,
+    vapidFirstByte: '',
+    testA: { status: 'FAIL' },
+    testB: { status: 'FAIL' }
+  };
 
   // Verify registration state
   console.log('[DIAGNOSTIC] ServiceWorkerRegistration state:');
@@ -145,11 +178,11 @@ export async function subscribeToPush(
   console.log('  - location.origin:', window.location.origin);
 
   if (!registration.active) {
-    throw new Error('DIAGNOSTIC: Service worker not active');
+    return { diagnostic };
   }
 
   if (!registration.pushManager) {
-    throw new Error('DIAGNOSTIC: PushManager not available');
+    return { diagnostic };
   }
 
   // Get VAPID public key from backend
@@ -159,9 +192,12 @@ export async function subscribeToPush(
 
   // Convert to Uint8Array
   const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+  diagnostic.vapidKeyLength = applicationServerKey.byteLength;
+  diagnostic.vapidFirstByte = '0x' + applicationServerKey[0].toString(16).padStart(2, '0');
+
   console.log('[DIAGNOSTIC] VAPID key decoded:');
   console.log('  - byteLength:', applicationServerKey.byteLength);
-  console.log('  - first byte (hex):', '0x' + applicationServerKey[0].toString(16).padStart(2, '0'));
+  console.log('  - first byte (hex):', diagnostic.vapidFirstByte);
   console.log('  - expected: 65 bytes, starting with 0x04');
 
   // TEST A: PushManager.subscribe() WITHOUT applicationServerKey
@@ -171,10 +207,11 @@ export async function subscribeToPush(
       userVisibleOnly: true
     });
 
+    diagnostic.testA.status = 'PASS';
+    diagnostic.testA.endpoint = testASubscription.endpoint.substring(0, 60) + '...';
+
     console.log('[TEST A] ✅ SUCCESS');
-    console.log('[TEST A] Subscription returned:', !!testASubscription);
     console.log('[TEST A] Endpoint:', testASubscription.endpoint);
-    console.log('[TEST A] Endpoint starts with:', testASubscription.endpoint.substring(0, 50));
 
     // Clean up TEST A subscription
     console.log('[TEST A] Cleaning up test subscription...');
@@ -182,15 +219,13 @@ export async function subscribeToPush(
     console.log('[TEST A] Test subscription unsubscribed');
 
   } catch (errorA: any) {
+    diagnostic.testA.status = 'FAIL';
+    diagnostic.testA.errorName = errorA.name || 'Unknown';
+    diagnostic.testA.errorMessage = errorA.message || 'No message';
+
     console.error('[TEST A] ❌ FAILED');
     console.error('[TEST A] error.name:', errorA.name);
     console.error('[TEST A] error.message:', errorA.message);
-    console.error('[TEST A] error.constructor.name:', errorA.constructor.name);
-    console.error('[TEST A] Full error:', errorA);
-    console.error('[TEST A] Error keys:', Object.keys(errorA));
-
-    // If TEST A fails, PushManager itself doesn't work on this origin
-    throw new Error(`DIAGNOSTIC TEST A FAILED: ${errorA.name} - ${errorA.message}`);
   }
 
   // TEST B: PushManager.subscribe() WITH applicationServerKey
@@ -203,10 +238,11 @@ export async function subscribeToPush(
       applicationServerKey: applicationServerKey.buffer as ArrayBuffer
     });
 
+    diagnostic.testB.status = 'PASS';
+    diagnostic.testB.endpoint = testBSubscription.endpoint.substring(0, 60) + '...';
+
     console.log('[TEST B] ✅ SUCCESS');
-    console.log('[TEST B] Subscription returned:', !!testBSubscription);
     console.log('[TEST B] Endpoint:', testBSubscription.endpoint);
-    console.log('[TEST B] Endpoint starts with:', testBSubscription.endpoint.substring(0, 50));
 
     // Verify subscription has required keys
     const p256dhKey = testBSubscription.getKey('p256dh');
@@ -231,19 +267,18 @@ export async function subscribeToPush(
     console.log('[TEST B] Subscription data prepared');
     console.log('=== DIAGNOSTIC COMPLETE: BOTH TESTS PASSED ===');
 
-    return subscriptionData;
+    return { subscriptionData, diagnostic };
 
   } catch (errorB: any) {
+    diagnostic.testB.status = 'FAIL';
+    diagnostic.testB.errorName = errorB.name || 'Unknown';
+    diagnostic.testB.errorMessage = errorB.message || 'No message';
+
     console.error('[TEST B] ❌ FAILED');
     console.error('[TEST B] error.name:', errorB.name);
     console.error('[TEST B] error.message:', errorB.message);
-    console.error('[TEST B] error.constructor.name:', errorB.constructor.name);
-    console.error('[TEST B] Full error:', errorB);
-    console.error('[TEST B] Error keys:', Object.keys(errorB));
-    console.error('[TEST B] Error stack:', errorB.stack);
 
-    // TEST A passed but TEST B failed - the VAPID key is the problem
-    throw new Error(`DIAGNOSTIC TEST B FAILED: ${errorB.name} - ${errorB.message}`);
+    return { diagnostic };
   }
 }
 
@@ -297,11 +332,11 @@ export async function sendSubscriptionToBackend(
 
 /**
  * Complete push notification setup flow
- * Improved error handling with specific failure stages
+ * Enhanced to return diagnostic results
  */
 export async function setupPushNotifications(
   location?: { lat: number; lon: number }
-): Promise<{ subscription_id: string; subscription: PushSubscriptionData }> {
+): Promise<{ subscription_id?: string; subscription?: PushSubscriptionData; diagnostic?: DiagnosticResult }> {
   try {
     // STAGE 1: Check support
     if (!isPushSupported()) {
@@ -328,85 +363,17 @@ export async function setupPushNotifications(
       throw new Error(`STAGE: Service Worker Registration - ${error.message || 'Failed to register service worker'}`);
     }
 
-    // STAGE 4: Check for and handle existing subscription
-    let subscription: PushSubscriptionData | null = null;
-    try {
-      const existingSub = await registration.pushManager.getSubscription();
-      if (existingSub) {
-        console.log('[WebPush] Found existing subscription, checking compatibility...');
+    // STAGE 4: Run diagnostic and get subscription
+    const result = await subscribeToPush(registration);
 
-        // Try to determine if subscription is compatible
-        // If we can't verify, unsubscribe to be safe
-        let isCompatible = false;
-        try {
-          isCompatible = await isSubscriptionCompatible();
-        } catch (compatError) {
-          console.log('[WebPush] Cannot verify compatibility, will unsubscribe...');
-        }
-
-        if (isCompatible) {
-          // REUSE the compatible subscription instead of creating a new one
-          console.log('[WebPush] Existing subscription is compatible, reusing it...');
-          const p256dhKey = existingSub.getKey('p256dh');
-          const authKey = existingSub.getKey('auth');
-
-          if (p256dhKey && authKey) {
-            subscription = {
-              endpoint: existingSub.endpoint,
-              keys: {
-                p256dh: arrayBufferToBase64(p256dhKey),
-                auth: arrayBufferToBase64(authKey)
-              }
-            };
-            console.log('[WebPush] ✅ Reused existing compatible subscription');
-          } else {
-            // Subscription missing keys, unsubscribe and create new one
-            console.log('[WebPush] Existing subscription missing keys, unsubscribing...');
-            await existingSub.unsubscribe();
-          }
-        } else {
-          // VAPID key changed, unsubscribe old subscription
-          console.log('[WebPush] Existing subscription incompatible (VAPID changed), unsubscribing...');
-          await existingSub.unsubscribe();
-        }
-      }
-    } catch (error) {
-      console.warn('[WebPush] Failed to check existing subscription, continuing...', error);
-    }
-
-    // STAGE 5: Subscribe to push with VAPID key (only if no compatible subscription exists)
-    if (!subscription) {
-      try {
-        subscription = await subscribeToPush(registration);
-      } catch (error: any) {
-        // Provide specific error for PushManager.subscribe failures
-        if (error.name === 'NotAllowedError') {
-          throw new Error('STAGE: Push Subscribe - Permission denied by browser');
-        } else if (error.name === 'NotSupportedError') {
-          throw new Error('STAGE: Push Subscribe - Push messaging not supported');
-        } else if (error.name === 'InvalidStateError') {
-          throw new Error('STAGE: Push Subscribe - Service worker not active');
-        } else {
-          throw new Error(`STAGE: Push Subscribe - ${error.message || 'PushManager.subscribe() failed'}`);
-        }
-      }
-    }
-
-    // STAGE 6: Send to backend
-    let result: { subscription_id: string };
-    try {
-      result = await sendSubscriptionToBackend(subscription, location);
-    } catch (error: any) {
-      throw new Error(`STAGE: Backend Registration - ${error.message || 'Failed to register with backend'}`);
-    }
-
-    console.log('[WebPush] ✅ Push notifications enabled successfully');
+    // Return diagnostic results for display
     return {
-      subscription_id: result.subscription_id,
-      subscription
+      subscription_id: undefined, // Not sending to backend in diagnostic mode
+      subscription: result.subscriptionData,
+      diagnostic: result.diagnostic
     };
+
   } catch (error: any) {
-    // Re-throw with original error message if already formatted
     throw error;
   }
 }
