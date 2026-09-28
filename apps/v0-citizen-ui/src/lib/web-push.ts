@@ -272,6 +272,7 @@ export async function setupPushNotifications(
     }
 
     // STAGE 4: Check for and handle existing subscription
+    let subscription: PushSubscriptionData | null = null;
     try {
       const existingSub = await registration.pushManager.getSubscription();
       if (existingSub) {
@@ -279,15 +280,36 @@ export async function setupPushNotifications(
 
         // Try to determine if subscription is compatible
         // If we can't verify, unsubscribe to be safe
+        let isCompatible = false;
         try {
-          const isCompatible = await isSubscriptionCompatible();
-          if (!isCompatible) {
-            console.log('[WebPush] Existing subscription incompatible (VAPID changed), unsubscribing...');
+          isCompatible = await isSubscriptionCompatible();
+        } catch (compatError) {
+          console.log('[WebPush] Cannot verify compatibility, will unsubscribe...');
+        }
+
+        if (isCompatible) {
+          // REUSE the compatible subscription instead of creating a new one
+          console.log('[WebPush] Existing subscription is compatible, reusing it...');
+          const p256dhKey = existingSub.getKey('p256dh');
+          const authKey = existingSub.getKey('auth');
+
+          if (p256dhKey && authKey) {
+            subscription = {
+              endpoint: existingSub.endpoint,
+              keys: {
+                p256dh: arrayBufferToBase64(p256dhKey),
+                auth: arrayBufferToBase64(authKey)
+              }
+            };
+            console.log('[WebPush] ✅ Reused existing compatible subscription');
+          } else {
+            // Subscription missing keys, unsubscribe and create new one
+            console.log('[WebPush] Existing subscription missing keys, unsubscribing...');
             await existingSub.unsubscribe();
           }
-        } catch (compatError) {
-          // If we can't check compatibility, unsubscribe old one to be safe
-          console.log('[WebPush] Cannot verify compatibility, unsubscribing old subscription...');
+        } else {
+          // VAPID key changed, unsubscribe old subscription
+          console.log('[WebPush] Existing subscription incompatible (VAPID changed), unsubscribing...');
           await existingSub.unsubscribe();
         }
       }
@@ -295,20 +317,21 @@ export async function setupPushNotifications(
       console.warn('[WebPush] Failed to check existing subscription, continuing...', error);
     }
 
-    // STAGE 5: Subscribe to push with VAPID key
-    let subscription: PushSubscriptionData;
-    try {
-      subscription = await subscribeToPush(registration);
-    } catch (error: any) {
-      // Provide specific error for PushManager.subscribe failures
-      if (error.name === 'NotAllowedError') {
-        throw new Error('STAGE: Push Subscribe - Permission denied by browser');
-      } else if (error.name === 'NotSupportedError') {
-        throw new Error('STAGE: Push Subscribe - Push messaging not supported');
-      } else if (error.name === 'InvalidStateError') {
-        throw new Error('STAGE: Push Subscribe - Service worker not active');
-      } else {
-        throw new Error(`STAGE: Push Subscribe - ${error.message || 'PushManager.subscribe() failed'}`);
+    // STAGE 5: Subscribe to push with VAPID key (only if no compatible subscription exists)
+    if (!subscription) {
+      try {
+        subscription = await subscribeToPush(registration);
+      } catch (error: any) {
+        // Provide specific error for PushManager.subscribe failures
+        if (error.name === 'NotAllowedError') {
+          throw new Error('STAGE: Push Subscribe - Permission denied by browser');
+        } else if (error.name === 'NotSupportedError') {
+          throw new Error('STAGE: Push Subscribe - Push messaging not supported');
+        } else if (error.name === 'InvalidStateError') {
+          throw new Error('STAGE: Push Subscribe - Service worker not active');
+        } else {
+          throw new Error(`STAGE: Push Subscribe - ${error.message || 'PushManager.subscribe() failed'}`);
+        }
       }
     }
 
