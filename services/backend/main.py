@@ -47,8 +47,9 @@ async def lifespan(app: FastAPI):
         database.db_config = DatabaseConfig(settings.database_url)
         global_db_config = database.db_config
 
-        # Optionally create tables (for development)
-        # await global_db_config.init_db()
+        # Create tables if they don't exist (SOS table migration)
+        await global_db_config.init_db()
+        logger.info("Database tables initialized")
         logger.info("Database connection established")
 
         # 2. Initialize node registry (required for Track 3C normalization)

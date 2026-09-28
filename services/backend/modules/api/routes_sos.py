@@ -44,7 +44,7 @@ class SOSResponse(BaseModel):
 
 class SOSUpdateRequest(BaseModel):
     """Update SOS status"""
-    status: str = Field(..., regex="^(QUEUED|SENT|ACKNOWLEDGED|UNREACHABLE|RESOLVED)$")
+    status: str = Field(..., pattern="^(QUEUED|SENT|ACKNOWLEDGED|UNREACHABLE|RESOLVED)$")
 
 
 # Routes
