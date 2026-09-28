@@ -1,0 +1,22 @@
+{
+  "name": "NexAlert Citizen Safety",
+  "short_name": "NexAlert",
+  "description": "Real-time wildfire and hazard alerts for your safety",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff8f4",
+  "theme_color": "#1e3433",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["news", "utilities"],
+  "scope": "/",
+  "lang": "en-US",
+  "dir": "ltr"
+}

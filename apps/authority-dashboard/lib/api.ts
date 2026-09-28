@@ -65,6 +65,27 @@ export const api = {
   async getHealth(): Promise<{ status: string; timestamp: string; database: string }> {
     return fetchJSON('/health')
   },
+
+  // Incident endpoints (Track B2)
+  async getIncidents(): Promise<any[]> {
+    return fetchJSON('/incidents')
+  },
+
+  async getIncident(incidentId: string): Promise<any> {
+    return fetchJSON(`/incidents/${incidentId}`)
+  },
+
+  async getIncidentObservations(incidentId: string): Promise<any[]> {
+    return fetchJSON(`/incidents/${incidentId}/observations`)
+  },
+
+  async getRegionalHazards(): Promise<any[]> {
+    return fetchJSON('/regional-hazards')
+  },
+
+  async getNodeStatus(): Promise<any[]> {
+    return fetchJSON('/node-status')
+  },
 }
 
 export { APIError }

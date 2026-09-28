@@ -28,11 +28,12 @@
 #include "driver/gpio.h"
 #include "esp_adc/adc_oneshot.h"  // Track 3A: ADC for MQ-2
 
-// Sensor drivers - Track 3A: BME680, MPU6050, MQ-2
+// Sensor drivers - Track 3A: BME680, MPU6050, MQ-2, KY-028
 #include "i2c_bus.h"
 #include "bme680.h"
 #include "mpu6050.h"
 #include "mq2.h"
+#include "ky028.h"  // KY-028 thermistor replaces BME680 temperature
 
 // Telemetry and network
 #include "hardware_json.h"      // Track 3A: Hardware JSON for ESP32 → MQTT transport
@@ -105,6 +106,13 @@ static struct {
     float humid_samples[BASELINE_HISTORY_SIZE];
     uint16_t humid_count;
 } g_baseline_history = {0};
+
+// State for MPU6050 vibration filtering
+static float mpu_ema_x = 0.0f;
+static float mpu_ema_y = 0.0f;
+static float mpu_ema_z = 0.0f;
+static bool mpu_ema_initialized = false;
+#define MPU_EMA_ALPHA 0.05f  // Low-pass filter coefficient for gravity tracking
 
 // Statistics
 static uint32_t g_sample_count = 0;
@@ -433,6 +441,47 @@ static void sampling_task(void *pvParameters)
         return;
     }
 
+    // Initialize KY-028 thermistor temperature sensor on GPIO10
+    ky028_config_t ky028_cfg = {
+        .gpio_pin = 10,               // GPIO10 for KY-028 analog output
+        .adc_channel = ADC_CHANNEL_9, // GPIO10 = ADC1_CHANNEL_9 on ESP32-S3
+        .temp_cal = temp_cal,
+    };
+    ret = ky028_init(&ky028_cfg);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "KY-028 init failed: %d", ret);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // ========== TEMPORARY KY-028 DIAGNOSTIC (NO WIFI REQUIRED) ==========
+    ESP_LOGI(TAG, "");
+    ESP_LOGI(TAG, "╔═══════════════════════════════════════════════════════════╗");
+    ESP_LOGI(TAG, "║  KY-028 DIRECT HARDWARE DIAGNOSTIC (NO WIFI DEPENDENCY)  ║");
+    ESP_LOGI(TAG, "╚═══════════════════════════════════════════════════════════╝");
+    ESP_LOGI(TAG, "");
+
+    for (int diag_idx = 0; diag_idx < 5; diag_idx++) {
+        sensor_reading_t diag_temp;
+        ret = ky028_read_temperature(&diag_temp);
+
+        ESP_LOGI(TAG, "Reading #%d:", diag_idx + 1);
+        if (ret == ESP_OK && diag_temp.valid) {
+            ESP_LOGI(TAG, "  Final temp_c: %.2f°C", diag_temp.value);
+        } else {
+            ESP_LOGI(TAG, "  ERROR: KY-028 read failed");
+        }
+        ESP_LOGI(TAG, "");
+
+        vTaskDelay(pdMS_TO_TICKS(2000));  // 2 second delay between readings
+    }
+
+    ESP_LOGI(TAG, "╔═══════════════════════════════════════════════════════════╗");
+    ESP_LOGI(TAG, "║  KY-028 DIAGNOSTIC COMPLETE - CONTINUING TO NORMAL FLOW  ║");
+    ESP_LOGI(TAG, "╚═══════════════════════════════════════════════════════════╝");
+    ESP_LOGI(TAG, "");
+    // ========== END TEMPORARY DIAGNOSTIC ==========
+
     ESP_LOGI(TAG, "Intelligence pipeline initialized");
     ESP_LOGI(TAG, "Baseline: state=%s, samples=%u", baseline_state_name(baseline_current_state), baseline_sample_count);
 
@@ -445,14 +494,15 @@ static void sampling_task(void *pvParameters)
         uint32_t measurement_time_ms = (uint32_t)(esp_timer_get_time() / 1000);
 
         // ========== SENSOR ACQUISITION - TRACK 3A ==========
-        // BME680: Temperature, Humidity, Pressure, Gas Resistance
+        // KY-028: Temperature (replaces BME680 temperature)
+        // BME680: Humidity, Pressure, Gas Resistance
         sensor_reading_t temp_reading, humid_reading, pressure_reading, gas_reading;
 
-        ret = bme680_read_temperature(&temp_reading);
+        ret = ky028_read_temperature(&temp_reading);
         if (ret == ESP_OK && temp_reading.valid) {
-            ESP_LOGI(TAG, "Temperature: %.2f °C (BME680, calibrated)", temp_reading.value);
+            ESP_LOGI(TAG, "Temperature: %.2f °C (KY-028 thermistor, calibrated)", temp_reading.value);
         } else {
-            ESP_LOGW(TAG, "Temperature: MISSING (BME680 sensor error)");
+            ESP_LOGW(TAG, "Temperature: MISSING (KY-028 sensor error)");
             g_failed_samples++;
         }
 
@@ -505,9 +555,32 @@ static void sampling_task(void *pvParameters)
         float pressure_hpa = pressure_reading.valid ? pressure_reading.value : NAN;
         // Note: gas_resistance_adc from BME680 is not used in Track 4 intelligence
         // (void)gas_reading;  // BME680 gas resistance not integrated yet
-        float vibration_mps2 = accel_reading.valid ? sqrtf(accel_reading.x * accel_reading.x +
-                                                           accel_reading.y * accel_reading.y +
-                                                           accel_reading.z * accel_reading.z) : NAN;
+
+        float vibration_mps2 = NAN;
+        if (accel_reading.valid) {
+            if (!mpu_ema_initialized) {
+                mpu_ema_x = accel_reading.x;
+                mpu_ema_y = accel_reading.y;
+                mpu_ema_z = accel_reading.z;
+                mpu_ema_initialized = true;
+            } else {
+                // EMA to track gravity
+                mpu_ema_x = MPU_EMA_ALPHA * accel_reading.x + (1.0f - MPU_EMA_ALPHA) * mpu_ema_x;
+                mpu_ema_y = MPU_EMA_ALPHA * accel_reading.y + (1.0f - MPU_EMA_ALPHA) * mpu_ema_y;
+                mpu_ema_z = MPU_EMA_ALPHA * accel_reading.z + (1.0f - MPU_EMA_ALPHA) * mpu_ema_z;
+            }
+            // Isolate AC (vibration/shaking) from DC (gravity baseline)
+            float dx = accel_reading.x - mpu_ema_x;
+            float dy = accel_reading.y - mpu_ema_y;
+            float dz = accel_reading.z - mpu_ema_z;
+            vibration_mps2 = sqrtf(dx * dx + dy * dy + dz * dz);
+
+            // Apply a noise gate for MPU6050 typical stationary drift (approx 0.05m/s2)
+            if (vibration_mps2 < 0.05f) {
+                vibration_mps2 = 0.0f;
+            }
+        }
+
         float mq2_gas_adc = mq2_reading.valid ? mq2_reading.value : NAN;
 
         // ========== INTELLIGENCE PIPELINE ==========

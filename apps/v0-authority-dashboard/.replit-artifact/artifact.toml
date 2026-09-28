@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "NexAlert Authority Dashboard"
+description = "A mission-control authority dashboard for monitoring hazards, incidents, nodes, citizen SOS requests, alerts, response actions, and audit history with explicit freshness and uncertainty states."
+version = "1.0.0"
+id = "artifacts/nexalert-dashboard"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20751
+
+[services.development]
+run = "pnpm --filter @workspace/nexalert-dashboard run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/nexalert-dashboard", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/nexalert-dashboard/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20751"
+BASE_PATH = "/"

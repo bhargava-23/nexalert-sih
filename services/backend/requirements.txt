@@ -19,3 +19,7 @@ pyproj==3.6.1
 shapely==2.0.6
 numpy==1.26.4
 scipy==1.13.1
+
+# Web Push
+pywebpush==1.14.1
+py-vapid==1.9.1

@@ -14,6 +14,9 @@ from modules.api.routes import router as api_router
 from modules.api.routes_b2 import router_b2 as api_router_b2
 from modules.api.routes_c import router_c as api_router_c
 from modules.api.routes_demo import router as demo_router
+from modules.api.routes_test import router_test
+from modules.api.routes_ws import router_ws, manager as ws_manager
+from modules.api.routes_alerts import router_alerts
 from modules.ingestion.mqtt_consumer import MQTTTelemetryConsumer
 
 # Configure logging
@@ -114,10 +117,12 @@ app.add_middleware(
 )
 
 # Include API routes
-app.include_router(api_router, prefix="/api", tags=["api"])
+app.include_router(api_router, prefix="/api/v1", tags=["api"])
 app.include_router(api_router_b2, prefix="/api", tags=["api-b2"])
 app.include_router(api_router_c, prefix="/api", tags=["api-c"])
+app.include_router(router_alerts, prefix="/api/v1", tags=["alerts"])  # Alert & Web Push routes
 app.include_router(demo_router, prefix="", tags=["demo"])  # Demo routes at root for simplicity
+app.include_router(router_test, prefix="/api", tags=["test"])  # Canonical test routes
 
 
 @app.get("/")
@@ -145,3 +150,36 @@ if __name__ == "__main__":
         reload=settings.api_reload,
         log_level=settings.log_level.lower()
     )
+
+
+# CAPTIVE PORTAL ENDPOINTS
+from fastapi import Request
+from fastapi.responses import RedirectResponse, Response
+
+@app.get("/generate_204")
+async def generate_204():
+    """Android captive portal detection"""
+    return Response(status_code=204)
+
+@app.get("/hotspot-detect.html")
+async def hotspot_detect():
+    """iOS captive portal detection"""
+    return Response(
+        content="<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>",
+        media_type="text/html"
+    )
+
+@app.get("/ncsi.txt")
+async def windows_ncsi():
+    """Windows captive portal detection"""
+    return Response(content="Microsoft NCSI", media_type="text/plain")
+
+@app.get("/")
+async def root_redirect(request: Request):
+    """Redirect unknown requests to Citizen UI"""
+    host = request.headers.get("host", "")
+    if "192.168" not in host and host != "localhost:8000" and host != "127.0.0.1:8000":
+        # Redirect domain queries to the captive portal frontend (assuming frontend runs on port 5174 local network)
+        # Note: In a real AP setup, we'd use IP to avoid DNS loops
+        return RedirectResponse(url="http://192.168.4.1:5174/")
+    return {"message": "NexAlert Backend System"}

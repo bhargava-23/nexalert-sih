@@ -3,7 +3,7 @@
 # Track 3A: Matches recovered Arduino deployment hardware configuration
 
 idf_component_register(
-    SRCS "i2c_bus.c" "bme680.c" "mpu6050.c" "mq2.c"
+    SRCS "i2c_bus.c" "bme680.c" "mpu6050.c" "mq2.c" "dht22.c" "ky028.c"
     INCLUDE_DIRS "include"
     REQUIRES driver esp_timer esp_rom esp_adc
 )

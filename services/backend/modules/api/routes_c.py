@@ -103,16 +103,31 @@ async def start_simulation(
             f"type={request.simulation_type}"
         )
 
-        # Run simulation (placeholder - full integration later)
-        summary = run_fire_simulation(
+        # Run simulation and get actual FireSimulation object with geometries
+        from modules.simulation.fire_simulation import FireSimulation
+
+        sim_obj = FireSimulation(
             ignition_lon=request.ignition_lon,
             ignition_lat=request.ignition_lat,
+            ignition_time=datetime.utcnow(),
             simulation_type=request.simulation_type,
             incident_id=request.incident_id,
             domain_size_m=request.domain_size_m,
             cell_size_m=request.cell_size_m,
             max_time_minutes=request.max_time_minutes
         )
+
+        # Run the simulation steps
+        sim_obj.setup_environment(
+            wind_speed_ms=request.wind_speed_ms,
+            wind_from_deg=request.wind_from_deg,
+            moisture_index=request.moisture_index
+        )
+        sim_obj.run_propagation()
+        sim_obj.extract_geometries()
+        sim_obj.compute_risk()
+
+        summary = sim_obj.get_simulation_summary()
 
         # Create simulation record
         simulation = FireSimulationModel(
@@ -139,6 +154,64 @@ async def start_simulation(
         session.add(simulation)
         await session.commit()
         await session.refresh(simulation)
+
+        # Persist geometries to database
+        from geoalchemy2.shape import from_shape
+
+        # Helper function to compute geometry metrics
+        def compute_metrics(geom):
+            if geom is None:
+                return 0.0, 0.0
+            # Area in hectares (WGS84 rough approximation)
+            area_deg2 = geom.area
+            area_hectares = area_deg2 * 111320 * 111320 / 10000  # Very rough for low latitudes
+            # Perimeter in meters
+            perimeter_deg = geom.length
+            perimeter_m = perimeter_deg * 111320
+            return area_hectares, perimeter_m
+
+        # Persist CURRENT zone geometry
+        if sim_obj.current_geometry is not None:
+            area_ha, perimeter_m = compute_metrics(sim_obj.current_geometry)
+            geom_current = FireGeometry(
+                simulation_id=simulation.simulation_id,
+                zone_type="CURRENT",
+                geometry=from_shape(sim_obj.current_geometry, srid=4326),
+                area_hectares=area_ha,
+                perimeter_m=perimeter_m,
+                created_at=datetime.utcnow()
+            )
+            session.add(geom_current)
+
+        # Persist WARNING zone geometry
+        if sim_obj.warning_geometry is not None:
+            area_ha, perimeter_m = compute_metrics(sim_obj.warning_geometry)
+            geom_warning = FireGeometry(
+                simulation_id=simulation.simulation_id,
+                zone_type="WARNING",
+                geometry=from_shape(sim_obj.warning_geometry, srid=4326),
+                area_hectares=area_ha,
+                perimeter_m=perimeter_m,
+                created_at=datetime.utcnow()
+            )
+            session.add(geom_warning)
+
+        # Persist PROJECTION zone geometry
+        if sim_obj.projection_geometry is not None:
+            area_ha, perimeter_m = compute_metrics(sim_obj.projection_geometry)
+            geom_projection = FireGeometry(
+                simulation_id=simulation.simulation_id,
+                zone_type="PROJECTION",
+                geometry=from_shape(sim_obj.projection_geometry, srid=4326),
+                area_hectares=area_ha,
+                perimeter_m=perimeter_m,
+                created_at=datetime.utcnow()
+            )
+            session.add(geom_projection)
+
+        await session.commit()
+
+        logger.info(f"Fire simulation geometries persisted: {simulation.simulation_id}")
 
         logger.info(f"Fire simulation created: {simulation.simulation_id}")
 

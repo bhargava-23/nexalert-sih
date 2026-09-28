@@ -72,6 +72,9 @@ class TelemetryPersister:
             await self._persist_sensor_assessments(session, telemetry_id, node_id, payload)
             await self._persist_hazard_assessments(session, telemetry_id, payload)
 
+            # 5. Run vibration analysis for landslide hazard detection
+            await self._analyze_vibration(session, telemetry_id, payload)
+
             # 5. Commit transaction
             await session.commit()
 
@@ -313,3 +316,48 @@ class TelemetryPersister:
             f"Persisted {len(hazard_assessments)} hazard assessments "
             f"for telemetry_id={telemetry_id}"
         )
+
+    async def _analyze_vibration(
+        self,
+        session: AsyncSession,
+        telemetry_id: str,
+        payload: dict
+    ):
+        """Analyze vibration data for landslide hazard detection
+        
+        Args:
+            session: Database session
+            telemetry_id: Telemetry ID to link assessment to
+            payload: Telemetry envelope with measurements
+        
+        Integrates vibration_analyzer for MPU6500 landslide detection.
+        Creates HazardAssessment record if vibration detected.
+        """
+        from modules.hazards.vibration_analyzer import analyze_telemetry_vibration
+        
+        try:
+            # Analyze vibration from telemetry
+            assessment = analyze_telemetry_vibration(payload)
+            
+            if assessment and assessment.get('state') != 'NORMAL':
+                # Create hazard assessment record for non-normal states
+                record = HazardAssessment(
+                    telemetry_id=telemetry_id,
+                    hazard_type=assessment['hazard_type'],
+                    evidence=assessment.get('evidence'),
+                    confidence=assessment.get('confidence'),
+                    severity=assessment.get('severity'),
+                    risk=assessment.get('risk'),
+                    state=assessment.get('state'),
+                    information_condition=assessment.get('information_condition'),
+                    created_at=datetime.utcnow()
+                )
+                session.add(record)
+                
+                logger.info(
+                    f"Vibration analysis: telemetry_id={telemetry_id}, "
+                    f"state={assessment['state']}, risk={assessment['risk']}"
+                )
+        except Exception as e:
+            logger.warning(f"Vibration analysis failed: {e}")
+            # Non-blocking - continue with telemetry persistence

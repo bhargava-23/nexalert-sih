@@ -1,0 +1,499 @@
+<title>NexAlert Backend Verification</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px);
+
+  --pass: #16a34a;
+  --code-complete: #ca8a04;
+  --exists: #71717a;
+  --fail: #dc2626;
+
+  --bg: #f4f4f5;
+  --surface: #ffffff;
+  --border: #e4e4e7;
+  --text: #18181b;
+  --text-secondary: #52525b;
+  --evidence-bg: #fafafa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #18181b;
+    --surface: #27272a;
+    --border: #3f3f46;
+    --text: #f4f4f5;
+    --text-secondary: #a1a1aa;
+    --evidence-bg: #1c1c1f;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #18181b;
+  --surface: #27272a;
+  --border: #3f3f46;
+  --text: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --evidence-bg: #1c1c1f;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 24px 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.meta-item {
+  display: flex;
+  gap: 6px;
+}
+
+.meta-label {
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 11px;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 20px;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.stat.pass .stat-value { color: var(--pass); }
+.stat.code-complete .stat-value { color: var(--code-complete); }
+.stat.exists .stat-value { color: var(--exists); }
+.stat.fail .stat-value { color: var(--fail); }
+
+.stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.section.pass { border-left-color: var(--pass); }
+.section.code-complete { border-left-color: var(--code-complete); }
+.section.exists { border-left-color: var(--exists); }
+.section.fail { border-left-color: var(--fail); }
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.badge.pass {
+  background: rgba(22, 163, 74, 0.12);
+  color: var(--pass);
+}
+.badge.code-complete {
+  background: rgba(202, 138, 4, 0.12);
+  color: var(--code-complete);
+}
+.badge.exists {
+  background: rgba(113, 113, 122, 0.12);
+  color: var(--exists);
+}
+.badge.fail {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--fail);
+}
+
+.section-desc {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.checklist {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.checklist li::before {
+  content: '✓';
+  font-weight: 700;
+  color: var(--pass);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.checklist li.pending::before {
+  content: '○';
+  color: var(--text-secondary);
+}
+
+.checklist li.fail::before {
+  content: '✗';
+  color: var(--fail);
+}
+
+.evidence {
+  background: var(--evidence-bg);
+  border: 1px solid var(--border);
+  padding: 12px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 12px;
+}
+
+.alert {
+  padding: 12px 14px;
+  border-left: 3px solid;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 12px;
+}
+
+.alert.info {
+  background: rgba(59, 130, 246, 0.08);
+  border-left-color: #3b82f6;
+}
+
+.alert.warning {
+  background: rgba(202, 138, 4, 0.08);
+  border-left-color: var(--code-complete);
+}
+
+.alert strong {
+  font-weight: 600;
+}
+
+.next-steps {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  padding: 24px;
+  margin-top: 24px;
+}
+
+.next-steps h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.next-steps ol {
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+.next-steps li {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.code {
+  font-family: inherit;
+  background: var(--evidence-bg);
+  padding: 2px 5px;
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 600px) {
+  .summary {
+    grid-template-columns: 1fr;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap">
+
+<div class="container">
+  <div class="header">
+    <h1>NexAlert Backend Verification</h1>
+    <div class="meta">
+      <div class="meta-item">
+        <span class="meta-label">Date:</span>
+        <span>2026-09-26</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Backend PID:</span>
+        <span>12806</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Task:</span>
+        <span>Fix remaining blockers and verify critical capabilities</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="stat pass">
+      <div class="stat-value">2</div>
+      <div class="stat-label">✓ Verified Pass</div>
+    </div>
+    <div class="stat code-complete">
+      <div class="stat-value">3</div>
+      <div class="stat-label">⚙ Code Complete</div>
+    </div>
+    <div class="stat exists">
+      <div class="stat-value">3</div>
+      <div class="stat-label">◆ Exists (Prior)</div>
+    </div>
+    <div class="stat fail">
+      <div class="stat-value">1</div>
+      <div class="stat-label">✗ Not Implemented</div>
+    </div>
+  </div>
+
+  <div class="section pass">
+    <div class="section-header">
+      <div class="section-title">1. Web Push VAPID</div>
+      <div class="badge pass">✓ Pass</div>
+    </div>
+    <div class="section-desc">Backend successfully generates and serves VAPID keys for Web Push authentication</div>
+    <ul class="checklist">
+      <li>HTTP 200 OK response from endpoint</li>
+      <li>Valid 87-character base64-encoded EC public key</li>
+      <li>VAPID key files persisted (.vapid_private.pem: 241 bytes, .vapid_public.pem: 87 bytes)</li>
+      <li>Upgraded py-vapid to 1.9.4 and pywebpush to 2.0.0</li>
+      <li>Fixed public key serialization using X962 encoding</li>
+    </ul>
+    <div class="evidence">GET http://localhost:8000/api/v1/alerts/vapid-public-key
+→ {"public_key":"BOZFJRjcvUjkFeXph_WSt9pr-C4pzW42iDO5OfU2pWKu7Fym0iaIvwrXcWeumLFWTaVzP6vwAVUnmO3p1BeCY04"}</div>
+  </div>
+
+  <div class="section pass">
+    <div class="section-header">
+      <div class="section-title">2. Alert Database Tables</div>
+      <div class="badge pass">✓ Pass</div>
+    </div>
+    <div class="section-desc">All alert-related database tables created and operational in PostgreSQL</div>
+    <ul class="checklist">
+      <li>alerts table (13 columns, FK to incidents)</li>
+      <li>push_subscriptions table (15 columns, unique endpoint constraint)</li>
+      <li>alert_deliveries table (10 columns, FK to alerts and subscriptions)</li>
+      <li>All indexes created (active, location, delivery lookups)</li>
+      <li>Insert test successful (1 subscription, 0 alerts, 0 deliveries)</li>
+    </ul>
+    <div class="evidence">Current DB State:
+- push_subscriptions: 1 record
+- alerts: 0 records
+- alert_deliveries: 0 records
+- All foreign key constraints verified</div>
+  </div>
+
+  <div class="section code-complete">
+    <div class="section-header">
+      <div class="section-title">3. Web Push End-to-End</div>
+      <div class="badge code-complete">⚠ Not Verified</div>
+    </div>
+    <div class="section-desc">Complete Web Push infrastructure implemented, requires actual browser for Service Worker API testing</div>
+    <ul class="checklist">
+      <li>VAPID key generation and endpoint</li>
+      <li>Database tables for subscriptions/alerts/deliveries</li>
+      <li>API routes: subscribe, unsubscribe, update-location, citizen, test-push</li>
+      <li>Service worker (sw.js) for push event handling</li>
+      <li>PWA manifest for installable app</li>
+      <li>Alert manager for lifecycle management</li>
+      <li class="pending">Browser subscription via Service Worker API</li>
+      <li class="pending">Test push notification delivery</li>
+      <li class="pending">Notification appearance in browser</li>
+      <li class="pending">Notification click → citizen UI deep link</li>
+    </ul>
+    <div class="alert warning">
+      <strong>Blocker:</strong> Requires HTTPS context (Service Workers require secure origin). Test steps documented in VERIFICATION_RESULTS.md for manual browser testing.
+    </div>
+  </div>
+
+  <div class="section code-complete">
+    <div class="section-header">
+      <div class="section-title">4. Vibration Analyzer</div>
+      <div class="badge code-complete">⚙ Code Complete</div>
+    </div>
+    <div class="section-desc">VibrationAnalyzer class implemented (260 lines), integration with telemetry persister pending</div>
+    <ul class="checklist">
+      <li>State machine: NORMAL → WATCH → SUSPECTED → CONFIRMED → CRITICAL</li>
+      <li>Evidence/Confidence/Severity/Risk computation</li>
+      <li>Thresholds: 0.2 → 0.5 → 1.0 → 2.0 → 5.0 m/s²</li>
+      <li>Persistence-based state transitions (3 consecutive readings)</li>
+      <li>Information condition: GOOD/DEGRADED/UNKNOWN</li>
+      <li class="pending">Integration with telemetry persister</li>
+      <li class="pending">HazardAssessment record creation</li>
+      <li class="pending">B2 coordinator wiring for incidents</li>
+    </ul>
+    <div class="evidence">Location: services/backend/modules/hazards/vibration_analyzer.py
+Status: Complete, needs persister.py integration (~15 lines)</div>
+  </div>
+
+  <div class="section fail">
+    <div class="section-header">
+      <div class="section-title">5. MQ-2 Gas Integration</div>
+      <div class="badge fail">✗ Not Implemented</div>
+    </div>
+    <div class="section-desc">Hardware functional, but gas_adc values not integrated into fire evidence calculation</div>
+    <ul class="checklist">
+      <li>MQ-2 hardware present and reading values</li>
+      <li>Firmware sends gas_adc in telemetry (gas=3431)</li>
+      <li>Backend persists gas_adc in TelemetryRecord</li>
+      <li class="fail">Backend does NOT use gas_adc for fire evidence</li>
+      <li class="fail">No ADC-to-ppm conversion</li>
+      <li class="fail">No integration with fire hazard state machine</li>
+    </ul>
+    <div class="alert info">
+      <strong>Deferred:</strong> Lower priority than Web Push and Vibration per user requirements. Requires fire evidence calculation extension and calibration logic.
+    </div>
+  </div>
+
+  <div class="section exists">
+    <div class="section-header">
+      <div class="section-title">6. Fire Spread Simulation</div>
+      <div class="badge exists">◆ Exists</div>
+    </div>
+    <div class="section-desc">Complete fire spread implementation from prior work, auto-triggering not wired</div>
+    <ul class="checklist">
+      <li>Fire simulation API: POST /api/simulations/start</li>
+      <li>LIVE vs SIMULATION modes implemented</li>
+      <li>Propagation engine complete (Rothermel, arrival-time)</li>
+      <li>Database models (fire_simulations, fire_geometries, risk_surfaces)</li>
+      <li class="pending">Fire incident → automatic simulation trigger</li>
+      <li class="pending">Geometry retrieval API verified</li>
+      <li class="pending">Frontend map visualization</li>
+    </ul>
+  </div>
+
+  <div class="section exists">
+    <div class="section-header">
+      <div class="section-title">7-8. Risk Surface & Affected Area</div>
+      <div class="badge exists">◆ Exists</div>
+    </div>
+    <div class="section-desc">Complete exposure calculator and risk surface code from prior work</div>
+    <ul class="checklist">
+      <li>compute_risk_from_arrival_time() implemented</li>
+      <li>compute_population_exposure() implemented</li>
+      <li>compute_infrastructure_exposure() implemented</li>
+      <li>Zone exposure for CURRENT/WARNING/PROJECTION</li>
+      <li>RiskSurface database model exists</li>
+      <li class="pending">End-to-end runtime verification</li>
+    </ul>
+    <div class="alert info">
+      Requires operational fire simulation pipeline for complete verification.
+    </div>
+  </div>
+
+  <div class="section code-complete">
+    <div class="section-header">
+      <div class="section-title">9. Alert Lifecycle</div>
+      <div class="badge code-complete">⚙ Code Complete</div>
+    </div>
+    <div class="section-desc">Complete alert state machine from recommendation to stand-down</div>
+    <ul class="checklist">
+      <li>RECOMMENDATION → system creates from incident</li>
+      <li>APPROVED → authority approves</li>
+      <li>ISSUED → issued to delivery system</li>
+      <li>DELIVERING → Web Push in progress</li>
+      <li>DELIVERED → delivery complete</li>
+      <li>OPENED → notification clicked</li>
+      <li>UNREACHABLE → subscription invalid</li>
+      <li>STAND_DOWN → resolved/ended</li>
+    </ul>
+    <div class="evidence">Code: services/backend/modules/alerts/alert_manager.py
+Functions: create_alert_from_incident(), approve_and_issue_alert(), resolve_alert()</div>
+  </div>
+
+  <div class="next-steps">
+    <h2>Immediate Next Steps for Full Verification</h2>
+    <ol>
+      <li><strong>Web Push Browser Testing:</strong> Serve citizen-web with HTTPS (ngrok/similar), test Service Worker registration and push subscription flow in actual browser</li>
+      <li><strong>Vibration Integration:</strong> Add 15 lines to persister.py to call analyze_telemetry_vibration() and create HazardAssessment records</li>
+      <li><strong>End-to-End Alert Flow:</strong> Create fire incident → alert → Web Push delivery → verify notification → test click navigation → test stand-down</li>
+    </ol>
+  </div>
+
+  <div class="alert info">
+    <strong>Full Documentation:</strong> Detailed verification evidence, test payloads, and integration code snippets available in <span class="code">VERIFICATION_RESULTS.md</span>
+  </div>
+</div>

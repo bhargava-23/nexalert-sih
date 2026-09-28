@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "NexAlert Citizen Safety"
+description = "A mobile-first public emergency safety interface that surfaces canonical hazard alerts, freshness, safe actions, maps, safe places, SOS, and resilient offline/local states for citizens."
+version = "1.0.0"
+id = "artifacts/nexalert-citizen"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26223
+
+[services.development]
+run = "pnpm --filter @workspace/nexalert-citizen run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/nexalert-citizen", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/nexalert-citizen/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26223"
+BASE_PATH = "/"

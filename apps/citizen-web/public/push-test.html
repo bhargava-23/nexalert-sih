@@ -1,0 +1,416 @@
+<title>NexAlert Push Test</title>
+<style>
+:root {
+  padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px);
+
+  --success: #16a34a;
+  --error: #ef4444;
+  --info: #3b82f6;
+  --warning: #fbbf24;
+
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  --text: #0a0a0a;
+  --text-secondary: #52525b;
+  --log-bg: #f4f4f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0a0a;
+    --surface: #1a1a1a;
+    --border: #2a2a2a;
+    --text: #e5e5e5;
+    --text-secondary: #a1a1aa;
+    --log-bg: #0f0f0f;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0a0a0a;
+  --surface: #1a1a1a;
+  --border: #2a2a2a;
+  --text: #e5e5e5;
+  --text-secondary: #a1a1aa;
+  --log-bg: #0f0f0f;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', 'SF Mono', Monaco, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 24px 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.section.pending { border-left-color: var(--warning); }
+.section.ready { border-left-color: var(--success); }
+.section.error { border-left-color: var(--error); }
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.status {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+}
+
+.status.pending { background: rgba(251, 191, 36, 0.15); color: var(--warning); }
+.status.ready { background: rgba(22, 163, 74, 0.15); color: var(--success); }
+.status.error { background: rgba(239, 68, 68, 0.15); color: var(--error); }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+button {
+  background: var(--success);
+  color: var(--bg);
+  border: none;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 2px;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+button:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+button.secondary {
+  background: var(--info);
+}
+
+input[type="text"] {
+  width: 100%;
+  background: var(--log-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  margin-bottom: 12px;
+  border-radius: 2px;
+}
+
+.log {
+  background: var(--log-bg);
+  border: 1px solid var(--border);
+  padding: 12px;
+  font-size: 12px;
+  max-height: 250px;
+  overflow-y: auto;
+  border-radius: 2px;
+}
+
+.log-entry {
+  padding: 3px 0;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.log-entry.success { color: var(--success); }
+.log-entry.error { color: var(--error); }
+.log-entry.info { color: var(--info); }
+.log-entry.warn { color: var(--warning); }
+
+.meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+.code {
+  background: var(--log-bg);
+  padding: 2px 6px;
+  font-family: inherit;
+  color: var(--info);
+  font-size: 12px;
+  border-radius: 2px;
+}
+
+@media (max-width: 600px) {
+  body {
+    padding: 16px 12px;
+  }
+
+  .section {
+    padding: 16px;
+  }
+}
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap">
+
+<div class="container">
+  <h1>NexAlert Web Push Test</h1>
+  <div class="subtitle">Service Worker registration → Push subscription → Notification delivery</div>
+
+  <div class="section pending" id="section1">
+    <div class="section-header">
+      <div class="section-title">1. Service Worker</div>
+      <div class="status pending" id="status1">Not Registered</div>
+    </div>
+    <div class="controls">
+      <button id="registerSW">Register Service Worker</button>
+    </div>
+    <div class="log" id="log1"></div>
+  </div>
+
+  <div class="section pending" id="section2">
+    <div class="section-header">
+      <div class="section-title">2. Push Subscription</div>
+      <div class="status pending" id="status2">Not Subscribed</div>
+    </div>
+    <input type="text" id="backendInput" placeholder="Backend URL (default: http://192.168.29.178:8000)" value="http://192.168.29.178:8000">
+    <div class="controls">
+      <button id="getVapid" class="secondary">Get VAPID Key</button>
+      <button id="subscribe">Subscribe to Push</button>
+    </div>
+    <div class="log" id="log2"></div>
+    <div class="meta">Endpoint: <span id="endpoint">—</span></div>
+  </div>
+
+  <div class="section pending" id="section3">
+    <div class="section-header">
+      <div class="section-title">3. Test Notification</div>
+      <div class="status pending" id="status3">No Test Sent</div>
+    </div>
+    <div class="controls">
+      <button id="testPush">Send Test Push</button>
+    </div>
+    <div class="log" id="log3"></div>
+    <div class="meta">Check your system notifications after clicking "Send Test Push"</div>
+  </div>
+</div>
+
+<script>
+let vapidKey = null;
+let subscription = null;
+
+function log(logId, message, type = 'info') {
+  const logEl = document.getElementById(logId);
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+  entry.textContent = `[${time}] ${message}`;
+  logEl.appendChild(entry);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setStatus(sectionId, statusId, text, state) {
+  const section = document.getElementById(sectionId);
+  const status = document.getElementById(statusId);
+  section.className = `section ${state}`;
+  status.className = `status ${state}`;
+  status.textContent = text;
+}
+
+// 1. Register Service Worker
+document.getElementById('registerSW').addEventListener('click', async () => {
+  log('log1', 'Checking Service Worker support...', 'info');
+
+  if (!('serviceWorker' in navigator)) {
+    log('log1', 'ERROR: Service Worker not supported in this browser', 'error');
+    setStatus('section1', 'status1', 'Not Supported', 'error');
+    return;
+  }
+
+  if (!window.isSecureContext) {
+    log('log1', 'WARNING: Not a secure context (needs HTTPS or localhost)', 'warn');
+  }
+
+  try {
+    log('log1', 'Registering /sw.js...', 'info');
+    const registration = await navigator.serviceWorker.register('/sw.js');
+    log('log1', `✓ Registered: ${registration.scope}`, 'success');
+
+    await navigator.serviceWorker.ready;
+    log('log1', '✓ Service Worker active and ready', 'success');
+    setStatus('section1', 'status1', 'Ready', 'ready');
+
+  } catch (error) {
+    log('log1', `ERROR: ${error.message}`, 'error');
+    setStatus('section1', 'status1', 'Failed', 'error');
+  }
+});
+
+// 2. Get VAPID Key
+document.getElementById('getVapid').addEventListener('click', async () => {
+  const backend = document.getElementById('backendInput').value.trim();
+  if (!backend) {
+    log('log2', 'ERROR: Backend URL required', 'error');
+    return;
+  }
+
+  log('log2', `Fetching VAPID key from ${backend}/api/v1/alerts/vapid-public-key...`, 'info');
+
+  try {
+    const response = await fetch(`${backend}/api/v1/alerts/vapid-public-key`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    vapidKey = data.public_key;
+    log('log2', `✓ VAPID key: ${vapidKey.substring(0, 30)}...`, 'success');
+
+  } catch (error) {
+    log('log2', `ERROR: ${error.message}`, 'error');
+  }
+});
+
+// 3. Subscribe to Push
+document.getElementById('subscribe').addEventListener('click', async () => {
+  if (!vapidKey) {
+    log('log2', 'ERROR: Get VAPID key first', 'error');
+    return;
+  }
+
+  log('log2', 'Requesting notification permission...', 'info');
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      log('log2', `ERROR: Permission ${permission}`, 'error');
+      setStatus('section2', 'status2', 'Denied', 'error');
+      return;
+    }
+
+    log('log2', '✓ Permission granted', 'success');
+
+    const registration = await navigator.serviceWorker.ready;
+
+    // Convert VAPID key to Uint8Array
+    const urlBase64ToUint8Array = (base64String) => {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+    };
+
+    log('log2', 'Subscribing to push...', 'info');
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey)
+    });
+
+    const endpoint = subscription.endpoint;
+    document.getElementById('endpoint').textContent = endpoint.substring(0, 60) + '...';
+    log('log2', `✓ Subscribed: ${endpoint.substring(0, 50)}...`, 'success');
+
+    // Send to backend
+    const backend = document.getElementById('backendInput').value.trim();
+    log('log2', `Sending to ${backend}/api/v1/alerts/subscribe...`, 'info');
+
+    const response = await fetch(`${backend}/api/v1/alerts/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subscription.toJSON())
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const result = await response.json();
+    log('log2', `✓ Saved: subscription_id=${result.subscription_id.substring(0, 8)}...`, 'success');
+    setStatus('section2', 'status2', 'Subscribed', 'ready');
+
+  } catch (error) {
+    log('log2', `ERROR: ${error.message}`, 'error');
+    setStatus('section2', 'status2', 'Failed', 'error');
+  }
+});
+
+// 4. Test Push
+document.getElementById('testPush').addEventListener('click', async () => {
+  if (!subscription) {
+    log('log3', 'ERROR: Subscribe first', 'error');
+    return;
+  }
+
+  log('log3', 'Sending test push request...', 'info');
+
+  try {
+    const backend = document.getElementById('backendInput').value.trim();
+    const response = await fetch(`${backend}/api/v1/alerts/test-push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: subscription.endpoint })
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+
+    const result = await response.json();
+    log('log3', '✓ Test push sent successfully', 'success');
+    log('log3', `Result: ${JSON.stringify(result).substring(0, 100)}`, 'info');
+    log('log3', '→ Check your system notifications now', 'warn');
+    setStatus('section3', 'status3', 'Sent', 'ready');
+
+  } catch (error) {
+    log('log3', `ERROR: ${error.message}`, 'error');
+    setStatus('section3', 'status3', 'Failed', 'error');
+  }
+});
+
+// Initial logs
+log('log1', 'Click "Register Service Worker" to start', 'info');
+log('log2', 'Step 1: Get VAPID key, Step 2: Subscribe', 'info');
+log('log3', 'Complete subscription first', 'info');
+</script>

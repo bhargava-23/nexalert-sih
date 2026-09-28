@@ -18,7 +18,8 @@
 static const char *TAG = "mq2";
 
 static bool mq2_initialized = false;
-static adc_oneshot_unit_handle_t adc1_handle = NULL;
+// ADC1 handle is now shared with KY-028 - exported for other sensors to use
+adc_oneshot_unit_handle_t adc1_handle = NULL;
 static adc_channel_t mq2_channel;
 
 esp_err_t mq2_init(const mq2_config_t* config)

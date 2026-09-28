@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, and_
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel, Field
+from geoalchemy2.shape import to_shape
+from shapely.geometry import mapping
+from db.models_c import FireGeometry, FireSimulation
 import uuid
 
 from db.database import get_db_session
@@ -52,6 +55,7 @@ class IncidentResponse(BaseModel):
     hazard_assessments: List[HazardAssessmentResponse] = Field(default_factory=list)
 
     centroid: Optional[dict] = None  # {lat, lon}
+    geometry_geojson: Optional[dict] = None
     first_observed_at: datetime
     last_observed_at: datetime
     resolved_at: Optional[datetime]
@@ -403,3 +407,63 @@ def _node_status_to_response(status: NodeStatus) -> NodeStatusResponse:
         data_quality_index=status.data_quality_index,
         updated_at=status.updated_at
     )
+
+@router_b2.get("/incidents/{incident_id}/geometries")
+async def get_incident_geometries(
+    incident_id: str,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Get all active geometry zones (CURRENT, WARNING, PROJECTION) for an incident as a GeoJSON FeatureCollection.
+    """
+    try:
+        # Verify incident exists
+        try:
+            incident_uuid = uuid.UUID(incident_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid incident ID format: {incident_id}")
+
+        incident = await session.get(Incident, incident_uuid)
+        if not incident:
+            raise HTTPException(status_code=404, detail=f"Incident not found: {incident_id}")
+
+        # Query all geometries for this incident from FireGeometry table
+        # Join through FireSimulation since FireGeometry uses simulation_id
+        result = await session.execute(
+            select(FireGeometry)
+            .join(FireSimulation, FireGeometry.simulation_id == FireSimulation.simulation_id)
+            .where(FireSimulation.incident_id == incident_uuid)
+            .order_by(desc(FireGeometry.geometry_id))
+        )
+        geometries = result.scalars().all()
+
+        # Deduplicate by zone_type (take latest only)
+        latest_geos = {}
+        for geo in geometries:
+            if geo.zone_type not in latest_geos:
+                latest_geos[geo.zone_type] = geo
+
+        features = []
+        for zone_type, geo in latest_geos.items():
+            if geo.geometry is not None:
+                shape = to_shape(geo.geometry)
+                features.append({
+                    "type": "Feature",
+                    "properties": {
+                        "zone_type": zone_type,
+                        "area_hectares": geo.area_hectares,
+                        "perimeter_m": geo.perimeter_m if hasattr(geo, 'perimeter_m') else None
+                    },
+                    "geometry": mapping(shape)
+                })
+
+        return {
+            "type": "FeatureCollection",
+            "features": features
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get incident geometries: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
