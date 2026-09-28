@@ -129,75 +129,121 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 /**
  * Subscribe to push notifications
- * Enhanced error handling for mobile browsers
+ * DIAGNOSTIC MODE: Controlled differential diagnosis
  */
 export async function subscribeToPush(
   registration: ServiceWorkerRegistration
 ): Promise<PushSubscriptionData> {
+  console.log('=== PUSHMANAGER.SUBSCRIBE() DIAGNOSTIC ===');
+
+  // Verify registration state
+  console.log('[DIAGNOSTIC] ServiceWorkerRegistration state:');
+  console.log('  - registration exists:', !!registration);
+  console.log('  - registration.active:', registration.active);
+  console.log('  - registration.pushManager:', !!registration.pushManager);
+  console.log('  - registration.scope:', registration.scope);
+  console.log('  - location.origin:', window.location.origin);
+
+  if (!registration.active) {
+    throw new Error('DIAGNOSTIC: Service worker not active');
+  }
+
+  if (!registration.pushManager) {
+    throw new Error('DIAGNOSTIC: PushManager not available');
+  }
+
+  // Get VAPID public key from backend
+  console.log('[DIAGNOSTIC] Fetching VAPID public key from backend...');
+  const vapidPublicKey = await getVapidPublicKey();
+  console.log('[DIAGNOSTIC] VAPID key received, base64 length:', vapidPublicKey.length);
+
+  // Convert to Uint8Array
+  const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+  console.log('[DIAGNOSTIC] VAPID key decoded:');
+  console.log('  - byteLength:', applicationServerKey.byteLength);
+  console.log('  - first byte (hex):', '0x' + applicationServerKey[0].toString(16).padStart(2, '0'));
+  console.log('  - expected: 65 bytes, starting with 0x04');
+
+  // TEST A: PushManager.subscribe() WITHOUT applicationServerKey
+  console.log('\n=== TEST A: PushManager.subscribe({ userVisibleOnly: true }) ===');
   try {
-    // Get VAPID public key from backend
-    console.log('[WebPush] Fetching VAPID public key from backend...');
-    const vapidPublicKey = await getVapidPublicKey();
-    console.log('[WebPush] VAPID key received, length:', vapidPublicKey.length);
+    const testASubscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true
+    });
 
-    // Convert to Uint8Array for PushManager.subscribe()
-    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+    console.log('[TEST A] ✅ SUCCESS');
+    console.log('[TEST A] Subscription returned:', !!testASubscription);
+    console.log('[TEST A] Endpoint:', testASubscription.endpoint);
+    console.log('[TEST A] Endpoint starts with:', testASubscription.endpoint.substring(0, 50));
 
-    // Validate VAPID key format (must be 65 bytes, start with 0x04 for uncompressed P-256)
-    if (applicationServerKey.byteLength !== 65) {
-      throw new Error(`Invalid VAPID key length: ${applicationServerKey.byteLength} bytes (expected 65)`);
-    }
-    if (applicationServerKey[0] !== 4) {
-      throw new Error(`Invalid VAPID key format: first byte is 0x${applicationServerKey[0].toString(16)} (expected 0x04)`);
-    }
-    console.log('[WebPush] VAPID key validated: 65 bytes, starts with 0x04');
+    // Clean up TEST A subscription
+    console.log('[TEST A] Cleaning up test subscription...');
+    await testASubscription.unsubscribe();
+    console.log('[TEST A] Test subscription unsubscribed');
 
-    // Subscribe to push with VAPID key
-    // IMPORTANT: Pass the underlying ArrayBuffer, not the Uint8Array wrapper
-    // Android Chrome requires ArrayBuffer specifically
-    console.log('[WebPush] Calling PushManager.subscribe()...');
-    const subscription = await registration.pushManager.subscribe({
+  } catch (errorA: any) {
+    console.error('[TEST A] ❌ FAILED');
+    console.error('[TEST A] error.name:', errorA.name);
+    console.error('[TEST A] error.message:', errorA.message);
+    console.error('[TEST A] error.constructor.name:', errorA.constructor.name);
+    console.error('[TEST A] Full error:', errorA);
+    console.error('[TEST A] Error keys:', Object.keys(errorA));
+
+    // If TEST A fails, PushManager itself doesn't work on this origin
+    throw new Error(`DIAGNOSTIC TEST A FAILED: ${errorA.name} - ${errorA.message}`);
+  }
+
+  // TEST B: PushManager.subscribe() WITH applicationServerKey
+  console.log('\n=== TEST B: PushManager.subscribe({ userVisibleOnly: true, applicationServerKey }) ===');
+  console.log('[TEST B] Using NexAlert VAPID key:', applicationServerKey.byteLength, 'bytes');
+
+  try {
+    const testBSubscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: applicationServerKey.buffer as ArrayBuffer
     });
 
-    console.log('[WebPush] ✅ Push subscription created successfully');
-    console.log('[WebPush] Endpoint:', subscription.endpoint);
+    console.log('[TEST B] ✅ SUCCESS');
+    console.log('[TEST B] Subscription returned:', !!testBSubscription);
+    console.log('[TEST B] Endpoint:', testBSubscription.endpoint);
+    console.log('[TEST B] Endpoint starts with:', testBSubscription.endpoint.substring(0, 50));
 
     // Verify subscription has required keys
-    const p256dhKey = subscription.getKey('p256dh');
-    const authKey = subscription.getKey('auth');
+    const p256dhKey = testBSubscription.getKey('p256dh');
+    const authKey = testBSubscription.getKey('auth');
+
+    console.log('[TEST B] p256dh key length:', p256dhKey?.byteLength);
+    console.log('[TEST B] auth key length:', authKey?.byteLength);
 
     if (!p256dhKey || !authKey) {
-      throw new Error('Subscription missing required keys (p256dh or auth)');
+      throw new Error('DIAGNOSTIC: Subscription missing required keys (p256dh or auth)');
     }
 
     // Convert subscription to data format
     const subscriptionData: PushSubscriptionData = {
-      endpoint: subscription.endpoint,
+      endpoint: testBSubscription.endpoint,
       keys: {
         p256dh: arrayBufferToBase64(p256dhKey),
         auth: arrayBufferToBase64(authKey)
       }
     };
 
-    console.log('[WebPush] Subscription data prepared for backend');
-    return subscriptionData;
-  } catch (error: any) {
-    console.error('[WebPush] Push subscription failed:', error);
+    console.log('[TEST B] Subscription data prepared');
+    console.log('=== DIAGNOSTIC COMPLETE: BOTH TESTS PASSED ===');
 
-    // Provide helpful error messages for common issues
-    if (error.name === 'NotAllowedError') {
-      throw new Error('Push subscription denied by browser or user');
-    } else if (error.name === 'NotSupportedError') {
-      throw new Error('Push messaging not supported on this device/browser');
-    } else if (error.name === 'InvalidStateError') {
-      throw new Error('Service worker is not in active state');
-    } else if (error.message?.includes('VAPID')) {
-      throw new Error(`VAPID key error: ${error.message}`);
-    } else {
-      throw error;
-    }
+    return subscriptionData;
+
+  } catch (errorB: any) {
+    console.error('[TEST B] ❌ FAILED');
+    console.error('[TEST B] error.name:', errorB.name);
+    console.error('[TEST B] error.message:', errorB.message);
+    console.error('[TEST B] error.constructor.name:', errorB.constructor.name);
+    console.error('[TEST B] Full error:', errorB);
+    console.error('[TEST B] Error keys:', Object.keys(errorB));
+    console.error('[TEST B] Error stack:', errorB.stack);
+
+    // TEST A passed but TEST B failed - the VAPID key is the problem
+    throw new Error(`DIAGNOSTIC TEST B FAILED: ${errorB.name} - ${errorB.message}`);
   }
 }
 
