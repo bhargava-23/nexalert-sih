@@ -102,11 +102,67 @@ export function SOSControl() {
   const [holding, setHolding] = useState(false);
   const [seconds, setSeconds] = useState(3);
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sosId, setSOSId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
-  const start = () => { if (sent) return; setHolding(true); setSeconds(3); timerRef.current = window.setInterval(() => setSeconds(value => { if (value <= 1) { window.clearInterval(timerRef.current!); setHolding(false); setSent(true); return 0; } return value - 1; }), 1000); };
-  const stop = () => { if (!sent && timerRef.current) { window.clearInterval(timerRef.current); setHolding(false); setSeconds(3); } };
+
+  const sendToBackend = async () => {
+    setSending(true);
+    setError(null);
+    try {
+      // Get location if available
+      let location: { location_lat?: number; location_lon?: number } = {};
+      if ('geolocation' in navigator) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
+          });
+          location.location_lat = position.coords.latitude;
+          location.location_lon = position.coords.longitude;
+        } catch (err) {
+          console.log('[SOS] Location unavailable, sending without location');
+        }
+      }
+
+      // Send SOS to backend
+      const { sendSOSRequest } = await import('@/lib/sos-api');
+      const response = await sendSOSRequest({
+        ...location,
+        device_info: navigator.userAgent,
+        message: 'Emergency SOS request from Citizen UI'
+      });
+
+      setSOSId(response.sos_id);
+      console.log('[SOS] Request sent successfully:', response.sos_id);
+    } catch (err: any) {
+      console.error('[SOS] Failed to send request:', err);
+      setError(err.message || 'Failed to send SOS');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const start = () => {
+    if (sent || sending) return;
+    setHolding(true);
+    setSeconds(3);
+    timerRef.current = window.setInterval(() => setSeconds(value => {
+      if (value <= 1) {
+        window.clearInterval(timerRef.current!);
+        setHolding(false);
+        setSent(true);
+        sendToBackend();
+        return 0;
+      }
+      return value - 1;
+    }), 1000);
+  };
+
+  const stop = () => { if (!sent && !sending && timerRef.current) { window.clearInterval(timerRef.current); setHolding(false); setSeconds(3); } };
   useEffect(() => () => { if (timerRef.current) window.clearInterval(timerRef.current); }, []);
-  return <section data-testid="control-sos" className="rounded-2xl border border-[#a8473e] bg-[#fff8f4] p-4 shadow-[0_10px_26px_rgba(105,53,44,.08)] sm:p-5"><div className="flex items-start gap-3"><div className="rounded-full bg-[#f6d9d2] p-2.5 text-[#923d34]"><PhoneCall size={21} /></div><div><h2 className="font-display text-xl font-semibold text-[#302a29]">Need immediate help?</h2><p className="mt-1 text-sm leading-5 text-[#645955]">Press and hold to prepare an SOS. This works independently of hazard detection.</p></div></div><button type="button" onPointerDown={start} onPointerUp={stop} onPointerLeave={stop} onKeyDown={event => { if (event.key === ' ' || event.key === 'Enter') start(); }} onKeyUp={event => { if (event.key === ' ' || event.key === 'Enter') stop(); }} data-testid="button-sos-hold" className={`mt-5 flex min-h-14 w-full items-center justify-center gap-3 rounded-xl font-mono-safe text-sm font-medium tracking-[.08em] text-[#fff8f4] transition ${sent ? 'bg-[#195d52]' : holding ? 'bg-[#70413a]' : 'bg-[#923d34] hover:bg-[#7e362f]'}`} aria-label="Press and hold to send SOS">{sent ? <><Check size={18} /> SOS READY TO SEND</> : holding ? <><span className="text-xl">{seconds}</span> RELEASE TO CANCEL</> : <><Siren size={18} /> PRESS AND HOLD FOR SOS</>}</button>{sent && <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#195d52]"><Signal size={15} /> Prepared locally. Send when network or voice service is available.</p>}<p className="mt-3 text-center font-mono-safe text-[9px] tracking-wide text-[#8a817b]">No call is placed until the hold completes</p></section>;
+
+  return <section data-testid="control-sos" className="rounded-2xl border border-[#a8473e] bg-[#fff8f4] p-4 shadow-[0_10px_26px_rgba(105,53,44,.08)] sm:p-5"><div className="flex items-start gap-3"><div className="rounded-full bg-[#f6d9d2] p-2.5 text-[#923d34]"><PhoneCall size={21} /></div><div><h2 className="font-display text-xl font-semibold text-[#302a29]">Need immediate help?</h2><p className="mt-1 text-sm leading-5 text-[#645955]">Press and hold to send an SOS. This works independently of hazard detection.</p></div></div><button type="button" onPointerDown={start} onPointerUp={stop} onPointerLeave={stop} onKeyDown={event => { if (event.key === ' ' || event.key === 'Enter') start(); }} onKeyUp={event => { if (event.key === ' ' || event.key === 'Enter') stop(); }} data-testid="button-sos-hold" disabled={sending} className={`mt-5 flex min-h-14 w-full items-center justify-center gap-3 rounded-xl font-mono-safe text-sm font-medium tracking-[.08em] text-[#fff8f4] transition ${sosId ? 'bg-[#195d52]' : sending ? 'bg-[#70413a]' : holding ? 'bg-[#70413a]' : 'bg-[#923d34] hover:bg-[#7e362f]'} disabled:opacity-75`} aria-label="Press and hold to send SOS">{sosId ? <><Check size={18} /> SOS SENT · {sosId.substring(0, 8)}</> : sending ? <><Signal size={18} className="animate-pulse" /> SENDING SOS...</> : sent ? <><Signal size={18} /> SENDING...</> : holding ? <><span className="text-xl">{seconds}</span> RELEASE TO CANCEL</> : <><Siren size={18} /> PRESS AND HOLD FOR SOS</>}</button>{sosId && <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#195d52]"><Check size={15} /> SOS request delivered to emergency responders</p>}{error && <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#923d34]"><AlertTriangle size={15} /> {error}</p>}<p className="mt-3 text-center font-mono-safe text-[9px] tracking-wide text-[#8a817b]">Emergency request is sent immediately after hold completes</p></section>;
 }
 
 export function AlertCard({ alert }: { alert: { id: string; title: string; status: string; severity: string; timestamp: string; detail: string } }) {
