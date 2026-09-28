@@ -12,6 +12,7 @@ const navItems = [
   { href: '/hazards', label: 'Hazards' },
   { href: '/nodes', label: 'Nodes' },
   { href: '/map', label: 'Map' },
+  { href: '/sos', label: 'SOS Emergency' },
 ]
 
 export function MainNav() {

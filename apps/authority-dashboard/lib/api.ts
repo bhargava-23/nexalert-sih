@@ -86,6 +86,28 @@ export const api = {
   async getNodeStatus(): Promise<any[]> {
     return fetchJSON('/node-status')
   },
+
+  // SOS emergency endpoints
+  async getSOSRequests(status?: string): Promise<any[]> {
+    const params = status ? `?status=${status}` : ''
+    return fetchJSON(`/sos${params}`)
+  },
+
+  async getSOSRequest(sosId: string): Promise<any> {
+    return fetchJSON(`/sos/${sosId}`)
+  },
+
+  async updateSOSStatus(sosId: string, status: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/sos/${sosId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    })
+    if (!response.ok) {
+      throw new APIError(response.status, `Failed to update SOS status: ${response.statusText}`)
+    }
+    return response.json()
+  },
 }
 
 export { APIError }
