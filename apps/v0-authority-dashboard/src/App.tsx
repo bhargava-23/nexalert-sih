@@ -11,10 +11,10 @@ import { TelemetryPageLive } from '@/pages/telemetry-live';
 import { IncidentsPageLive } from '@/pages/incidents-live';
 import { FireSpreadPageLive } from '@/pages/fire-spread-live';
 import { MultiHazardPageLive } from '@/pages/multi-hazard-live';
+import { CitizenSOSPageLive } from '@/pages/citizen-sos-live';
 import { AffectedAreaPageUnavailable } from '@/pages/affected-area-unavailable';
 import { HistoricalPageUnavailable } from '@/pages/historical-unavailable';
 import {
-  CitizenSOSPageUnavailable,
   AlertsPageUnavailable,
   ResponsePageUnavailable,
   AuditPageUnavailable,
@@ -45,7 +45,7 @@ function Router() {
           <Route path="/multi-hazard" component={MultiHazardPageLive} />
           <Route path="/nodes" component={NodesPageLive} />
           <Route path="/telemetry" component={TelemetryPageLive} />
-          <Route path="/citizen-sos" component={CitizenSOSPageUnavailable} />
+          <Route path="/citizen-sos" component={CitizenSOSPageLive} />
           <Route path="/alerts" component={AlertsPageUnavailable} />
           <Route path="/historical" component={HistoricalPageUnavailable} />
           <Route path="/response" component={ResponsePageUnavailable} />

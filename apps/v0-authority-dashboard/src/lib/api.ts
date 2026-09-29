@@ -2,7 +2,7 @@
  * NexAlert Backend API Client
  *
  * Real backend integration - NO mock data.
- * Base URL: https://cite-superior-enquiries-noticed.trycloudflare.com/api/v1
+ * Base URL: https://raspberrypi.tail39c545.ts.net/api/v1
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://raspberrypi.tail39c545.ts.net/api/v1';
